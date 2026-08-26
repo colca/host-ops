@@ -1,0 +1,42 @@
+{
+  "property": {
+    "id": "demo-property",
+    "name": "Example Home",
+    "timezone": "America/Los_Angeles",
+    "check_in_time": "16:00",
+    "check_out_time": "11:00"
+  },
+  "automation": {
+    "guest_answer_confidence_threshold": 0.9,
+    "maximum_automatic_rate_change_percent": 0,
+    "calendar_availability_months": 3
+  },
+  "integrations": {
+    "airbnb": {
+      "mode": "native_messages_and_ical",
+      "ical_url_environment_variable": "AIRBNB_ICAL_URL"
+    },
+    "cleaner_messaging": {
+      "provider": "file_outbox",
+      "production_candidate": "twilio"
+    }
+  },
+  "cleaning": {
+    "base_fee": 160,
+    "notification_delay_hours": 24,
+    "last_minute_notification": "immediate_if_check_in_is_before_delayed_notification",
+    "message_language": "English",
+    "extra_task_catalog": [
+      {"kind": "trash_cans_out_and_in", "description": "Move trash cans out and back in", "fee": 10},
+      {"kind": "supply_restock", "description": "Restock supplies", "fee": 10},
+      {"kind": "change_lock_battery", "description": "Change lock battery", "fee": 10}
+    ],
+    "required_photo_labels": [
+      "kitchen",
+      "living_room",
+      "primary_bedroom",
+      "bathroom",
+      "entry"
+    ]
+  }
+}

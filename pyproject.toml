@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "host-ops"
+version = "0.1.0"
+description = "Approval-aware workflow automation for short-term-rental hosts"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Host Ops contributors" }]
+dependencies = []
+
+[project.scripts]
+host-ops = "host_ops.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+

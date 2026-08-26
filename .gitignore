@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+var/*.db
+var/*.jsonl
+config/property.json
+.secrets/
+.env
