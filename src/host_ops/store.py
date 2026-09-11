@@ -147,23 +147,28 @@ class SqliteStore:
             return rows
 
     def list_cleaner_reminder_actions(self, now: datetime) -> list[sqlite3.Row]:
-        """List cleaner work that is eligible to appear in reminder messages."""
+        """List confirmed cleaner work that may appear in reminder messages.
+
+        The action's execution delay does not hide a confirmed date from the
+        schedule. The originating event is included so older stored actions,
+        created before ``check_in`` was copied into their payload, still work.
+        """
         with self.connect() as db:
             return list(
                 db.execute(
                     """
-                    SELECT id, status, payload, execute_at
+                    SELECT actions.id, actions.status, actions.payload,
+                           actions.execute_at, events.payload AS event_payload
                     FROM actions
-                    WHERE type = 'cleaner_sms'
-                      AND status IN (?, ?, ?)
-                      AND (execute_at IS NULL OR execute_at <= ?)
-                    ORDER BY execute_at, created_at
+                    JOIN events ON events.id = actions.event_id
+                    WHERE actions.type = 'cleaner_sms'
+                      AND actions.status IN (?, ?, ?)
+                    ORDER BY actions.execute_at, actions.created_at
                     """,
                     (
                         ActionStatus.READY.value,
                         ActionStatus.APPROVED.value,
                         ActionStatus.EXECUTED.value,
-                        now.isoformat(),
                     ),
                 )
             )

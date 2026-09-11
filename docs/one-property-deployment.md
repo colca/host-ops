@@ -74,11 +74,11 @@ Use `scripts/render_launchd_plist.py` to create an ignored 15-minute macOS
 LaunchAgent definition. The definition contains repository paths but no private
 calendar URL or cleaner contact information.
 
-The cleaner outbox groups eligible turnover dates into one weekly digest for
-the next 60 days and queues one additional reminder the day before each
-cleaning. Stable weekly and per-date keys prevent duplicates when the scheduler
-runs every 15 minutes. The default schedule is Monday at 9:00 AM for the weekly
-digest and 9:00 AM the day before cleaning, interpreted in the property timezone.
+The cleaner outbox queues a reminder five days before each confirmed stay's
+check-in and another reminder the day before its checkout cleaning. Every text
+contains all confirmed checkout/cleaning dates in the next 60 days. Stable
+per-stay keys prevent duplicates when the scheduler runs every 15 minutes. The
+default send time is 9:00 AM in the property timezone.
 
 ## Private values still needed
 

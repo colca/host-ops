@@ -472,12 +472,18 @@ END:VCALENDAR
 
         self.assertIn("BEGIN:VCALENDAR", content)
 
-    def test_cleaner_digest_and_day_before_reminder_are_queued_once(self) -> None:
+    def test_five_day_and_day_before_reminders_include_all_confirmed_dates(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             store = SqliteStore(root / "test.db")
             store.initialize()
-            event = Event(type="calendar_stay_detected", payload={})
+            event = Event(
+                type="calendar_stay_detected",
+                payload={
+                    "check_in": "2026-08-27T16:00:00-07:00",
+                    "check_out": "2026-09-01T11:00:00-07:00",
+                },
+            )
             action = ProposedAction(
                 event_id=event.id,
                 type="cleaner_sms",
@@ -491,27 +497,53 @@ END:VCALENDAR
                         ],
                     },
                 },
-                execute_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                # A confirmed stay appears in the schedule even before the old
+                # booking-detection delay has elapsed.
+                execute_at=datetime(2026, 8, 23, tzinfo=timezone.utc),
                 idempotency_key="due-cleaner-action",
             )
             store.save_event_and_actions(event, [action])
+            later_event = Event(
+                type="calendar_stay_detected",
+                payload={
+                    "check_in": "2026-09-07T16:00:00-07:00",
+                    "check_out": "2026-09-10T11:00:00-07:00",
+                },
+            )
+            later_action = ProposedAction(
+                event_id=later_event.id,
+                type="cleaner_sms",
+                summary="Later cleaner work order",
+                payload={"check_out": "2026-09-10T11:00:00-07:00"},
+                execute_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                idempotency_key="later-cleaner-action",
+            )
+            store.save_event_and_actions(later_event, [later_action])
             outbox = FileOutboxMessagingAdapter(root / "outbox.jsonl")
 
             first = run_due_cleaner_actions(
-                store, outbox, now=datetime(2026, 8, 31, 17, tzinfo=timezone.utc)
+                store, outbox, now=datetime(2026, 8, 22, 16, tzinfo=timezone.utc)
             )
             second = run_due_cleaner_actions(
-                store, outbox, now=datetime(2026, 8, 31, 17, tzinfo=timezone.utc)
+                store, outbox, now=datetime(2026, 8, 22, 16, tzinfo=timezone.utc)
+            )
+            day_before = run_due_cleaner_actions(
+                store, outbox, now=datetime(2026, 8, 31, 16, tzinfo=timezone.utc)
             )
 
-            self.assertEqual((1, 2), first)
-            self.assertEqual((1, 0), second)
-            self.assertEqual(ActionStatus.READY.value, store.list_actions()[0]["status"])
+            self.assertEqual((2, 1), first)
+            self.assertEqual((2, 0), second)
+            self.assertEqual((2, 1), day_before)
             records = (root / "outbox.jsonl").read_text().splitlines()
             self.assertEqual(2, len(records))
-            self.assertIn("Hi Cleaner", records[0])
-            self.assertIn("next 60 days", records[0])
-            self.assertIn("scheduled tomorrow", records[1])
+            for record in records:
+                self.assertIn("September 1, 2026", record)
+                self.assertIn("September 10, 2026", record)
+                self.assertIn("friendly reminder", record)
+                self.assertIn("COYU | Host Ops cleaner scheduling", record)
+                self.assertIn("Reply STOP", record)
+            self.assertIn("checks in in 5 days", records[0])
+            self.assertIn("scheduled for tomorrow", records[1])
 
     def test_runner_does_not_claim_future_or_pending_approval_actions(self) -> None:
         with TemporaryDirectory() as directory:

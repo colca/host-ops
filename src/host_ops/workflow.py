@@ -92,6 +92,7 @@ class WorkflowEngine:
                 {
                     "template": "cleaner_schedule",
                     "language": self.cleaning.message_language,
+                    "check_in": check_in.isoformat(),
                     "check_out": check_out.isoformat(),
                     "next_check_in": data.get("next_check_in"),
                 },
@@ -116,6 +117,7 @@ class WorkflowEngine:
                     "stay_id": stay_id,
                     "template": "cleaner_schedule",
                     "language": self.cleaning.message_language,
+                    "check_in": required(data, "check_in"),
                     "check_out": check_out.isoformat(),
                     "work_order": {
                         "base_fee": self.cleaning.base_fee,

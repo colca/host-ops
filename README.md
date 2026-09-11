@@ -64,11 +64,11 @@ provider. Only eligible `ready` or explicitly `approved` actions can run.
 Set `CLEANER_NAME` and `CLEANER_PHONE_NUMBER` (in E.164 format) only in the
 ignored `.env`; tracked configuration stores only those variable names.
 
-Cleaner messages are grouped into one weekly digest covering all eligible
-turnovers in the next 60 days. A separate deduplicated reminder is queued the
-day before each cleaning. By default, both use 9:00 AM in the property's IANA
-timezone, and the digest runs on Monday (`weekly_digest_weekday: 0`).
-Booking-by-booking messages are not queued.
+Cleaner reminders are queued five days before each confirmed stay's check-in
+and again the day before its checkout cleaning. Every reminder includes all
+confirmed checkout/cleaning dates in the next 60 days. Stable per-stay keys
+prevent duplicates when polling repeatedly. By default, reminders use 9:00 AM
+in the property's IANA timezone.
 
 ## Optional live SMS delivery
 
