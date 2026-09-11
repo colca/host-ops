@@ -15,6 +15,7 @@ class ActionStatus(StrEnum):
     READY = "ready"
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
+    PROCESSING = "processing"
     EXECUTED = "executed"
     CANCELLED = "cancelled"
 
@@ -57,4 +58,3 @@ class ProposedAction:
 class StoredAction:
     action: ProposedAction
     status: ActionStatus
-

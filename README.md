@@ -21,6 +21,9 @@ scrape Airbnb, send real messages, change prices, or initiate bank transfers.
 - A safe local message outbox that never sends a real text
 - Editable base and add-on cleaner fee schedule
 - Last-minute booking protection for cleaner notifications
+- Explainable nightly pricing recommendations from market comparables
+- Distance-weighted premiums for nearby sports, concerts, and conferences
+- Configurable price floors, ceilings, and maximum recommendation changes
 
 ## Run locally
 
@@ -38,11 +41,80 @@ Import a downloaded Airbnb calendar export:
 PYTHONPATH=src python3 -m host_ops.cli --db var/demo.db import-ical path/to/calendar.ics
 ```
 
+Poll the private Airbnb calendar without storing its URL in configuration:
+
+```bash
+export AIRBNB_ICAL_URL='https://www.airbnb.com/calendar/ical/...'
+PYTHONPATH=src python3 -m host_ops.cli --db var/host-ops.db poll-ical
+```
+
+The command is one-shot and idempotent, so run it from a local scheduler at the
+desired interval. Keep the environment variable in the scheduler's private
+secret configuration, never in a tracked script or service file.
+
+Poll and queue due cleaner work orders in the safe, non-delivering outbox:
+
+```bash
+scripts/run_host_ops.sh
+```
+
+The outbox is written to `var/cleaner-outbox.jsonl`, which is ignored by Git.
+Records remain `not_sent`; this command does not contact a cleaner or an SMS
+provider. Only eligible `ready` or explicitly `approved` actions can run.
+Set `CLEANER_NAME` and `CLEANER_PHONE_NUMBER` (in E.164 format) only in the
+ignored `.env`; tracked configuration stores only those variable names.
+
+Cleaner messages are grouped into one weekly digest covering all eligible
+turnovers in the next 60 days. A separate deduplicated reminder is queued the
+day before each cleaning. By default, both use 9:00 AM in the property's IANA
+timezone, and the digest runs on Monday (`weekly_digest_weekday: 0`).
+Booking-by-booking messages are not queued.
+
+## Optional live SMS delivery
+
+Live delivery is disabled while `cleaner_messaging.provider` is `file_outbox`.
+To prepare Twilio later, set the provider to `twilio` only in the private
+`config/property.json` and store `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
+`TWILIO_FROM_NUMBER` in `.env`. Submission still requires an explicit command:
+
+```bash
+PYTHONPATH=src python3 -m host_ops.cli deliver-outbox --confirm-live-delivery
+```
+
+This delivery command is intentionally not part of the automatic polling
+script. A provider-accepted message is marked `submitted`; failed requests
+return it to `not_sent` without exposing credentials or message contents.
+
+On macOS, render the 15-minute LaunchAgent definition without credentials:
+
+```bash
+python3 scripts/render_launchd_plist.py
+plutil -lint var/com.host-ops.poll.plist
+```
+
+The rendered plist stays under ignored `var/`. Copy it to
+`~/Library/LaunchAgents/com.host-ops.poll.plist` and load it only when ready for
+continuous local polling. The service calls `scripts/run_host_ops.sh`, which
+loads the ignored `.env` at runtime.
+
 Approve an action using the ID shown by `actions`:
 
 ```bash
 PYTHONPATH=src python3 -m host_ops.cli --db var/demo.db approve ACTION_ID
 ```
+
+Generate price recommendations from a normalized market/event snapshot:
+
+```bash
+PYTHONPATH=src python3 -m host_ops.cli \
+  --db var/demo.db recommend-prices config/pricing-snapshot.example.json
+```
+
+The regular-night recommendation starts from the median comparable rate.
+Nearby events and conferences add a configurable premium that decreases with
+distance. Every result records its evidence and remains `pending_approval`;
+this command never changes a live listing. See
+[pricing recommendations](docs/pricing-recommendations.md).
 
 Run the tests:
 
@@ -69,10 +141,10 @@ identifiers, access tokens, or real property photos in the public repository.
 ## Next milestone
 
 1. Add a small web dashboard for the action queue.
-2. Poll the private Airbnb iCal URL on a schedule.
+2. Install the private iCal poll command in the host's local scheduler.
 3. Replace the local cleaner outbox with SMS delivery and acknowledgement tracking.
 4. Add labeled cleaner-photo upload and checklist validation.
-5. Add event discovery and bounded pricing recommendations.
+5. Connect authorized comparable-rate, event, conference, and listing-rate adapters.
 
 See [the one-property deployment profile](docs/one-property-deployment.md) for
 the current Airbnb-only design and the remaining private configuration.

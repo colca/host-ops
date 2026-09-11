@@ -38,7 +38,7 @@ def parse_ical(content: str) -> list[CalendarStay]:
         if line == "BEGIN:VEVENT":
             current = {}
         elif line == "END:VEVENT" and current is not None:
-            if {"UID", "DTSTART", "DTEND"}.issubset(current):
+            if is_airbnb_reservation(current):
                 stays.append(
                     CalendarStay(
                         uid=current["UID"],
@@ -51,9 +51,19 @@ def parse_ical(content: str) -> list[CalendarStay]:
         elif current is not None and ":" in line:
             raw_key, value = line.split(":", 1)
             key = raw_key.split(";", 1)[0]
-            if key in {"UID", "DTSTART", "DTEND", "SUMMARY"}:
+            if key in {"UID", "DTSTART", "DTEND", "SUMMARY", "STATUS"}:
                 current[key] = value
     return stays
+
+
+def is_airbnb_reservation(event: dict[str, str]) -> bool:
+    """Exclude owner blocks and cancelled events from cleaner work generation."""
+    required = {"UID", "DTSTART", "DTEND", "SUMMARY"}
+    return (
+        required.issubset(event)
+        and event["SUMMARY"].strip().casefold() == "reserved"
+        and event.get("STATUS", "").strip().casefold() != "cancelled"
+    )
 
 
 def unfold_lines(content: str) -> list[str]:
@@ -72,4 +82,3 @@ def parse_ical_time(value: str) -> datetime:
     if value.endswith("Z"):
         return datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
     return datetime.strptime(value, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-

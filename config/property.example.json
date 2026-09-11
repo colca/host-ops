@@ -11,14 +11,40 @@
     "maximum_automatic_rate_change_percent": 0,
     "calendar_availability_months": 3
   },
+  "pricing": {
+    "minimum_nightly_rate": 75,
+    "maximum_nightly_rate": 1500,
+    "maximum_recommendation_change_percent": 50,
+    "maximum_event_premium_percent": 60,
+    "event_radius_miles": 5,
+    "minimum_comparable_count": 3,
+    "preferred_comparable_count": 5,
+    "minimum_rate_by_venue": {},
+    "last_minute_window_days": 5,
+    "last_minute_discount_percent": 20,
+    "event_category_premiums": {
+      "sports": 0,
+      "concert": 0,
+      "conference": 0,
+      "other": 0
+    }
+  },
   "integrations": {
     "airbnb": {
       "mode": "native_messages_and_ical",
-      "ical_url_environment_variable": "AIRBNB_ICAL_URL"
+      "ical_url_environment_variable": "AIRBNB_ICAL_URL",
+      "ical_timeout_seconds": 20
     },
     "cleaner_messaging": {
       "provider": "file_outbox",
-      "production_candidate": "twilio"
+      "production_candidate": "twilio",
+      "name_environment_variable": "CLEANER_NAME",
+      "phone_environment_variable": "CLEANER_PHONE_NUMBER",
+      "weekly_digest_weekday": 0,
+      "reminder_hour": 9,
+      "account_sid_environment_variable": "TWILIO_ACCOUNT_SID",
+      "auth_token_environment_variable": "TWILIO_AUTH_TOKEN",
+      "from_number_environment_variable": "TWILIO_FROM_NUMBER"
     }
   },
   "cleaning": {

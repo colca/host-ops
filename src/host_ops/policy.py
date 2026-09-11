@@ -12,6 +12,7 @@ class SafetyPolicy:
         "cleaner_payment",
         "refund",
         "rate_change",
+        "discount_change",
         "reservation_exception",
         "safety_response",
     }
@@ -32,4 +33,3 @@ class SafetyPolicy:
             )
 
         return action
-

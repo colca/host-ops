@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from .models import ActionStatus, Event, ProposedAction
@@ -111,3 +112,83 @@ class SqliteStore:
             )
             return cursor.rowcount == 1
 
+    def claim_due_actions(
+        self, action_type: str, now: datetime, limit: int = 100
+    ) -> list[sqlite3.Row]:
+        """Atomically claim due, approval-eligible actions for one runner."""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = list(
+                db.execute(
+                    """
+                    SELECT id, type, summary, status, payload, execute_at
+                    FROM actions
+                    WHERE type = ?
+                      AND status IN (?, ?)
+                      AND (execute_at IS NULL OR execute_at <= ?)
+                    ORDER BY COALESCE(execute_at, created_at), created_at
+                    LIMIT ?
+                    """,
+                    (
+                        action_type,
+                        ActionStatus.READY.value,
+                        ActionStatus.APPROVED.value,
+                        now.isoformat(),
+                        limit,
+                    ),
+                )
+            )
+            if rows:
+                placeholders = ", ".join("?" for _ in rows)
+                db.execute(
+                    f"UPDATE actions SET status = ? WHERE id IN ({placeholders})",
+                    (ActionStatus.PROCESSING.value, *(row["id"] for row in rows)),
+                )
+            return rows
+
+    def list_cleaner_reminder_actions(self, now: datetime) -> list[sqlite3.Row]:
+        """List cleaner work that is eligible to appear in reminder messages."""
+        with self.connect() as db:
+            return list(
+                db.execute(
+                    """
+                    SELECT id, status, payload, execute_at
+                    FROM actions
+                    WHERE type = 'cleaner_sms'
+                      AND status IN (?, ?, ?)
+                      AND (execute_at IS NULL OR execute_at <= ?)
+                    ORDER BY execute_at, created_at
+                    """,
+                    (
+                        ActionStatus.READY.value,
+                        ActionStatus.APPROVED.value,
+                        ActionStatus.EXECUTED.value,
+                        now.isoformat(),
+                    ),
+                )
+            )
+
+    def finish_action(self, action_id: str) -> bool:
+        with self.connect() as db:
+            cursor = db.execute(
+                "UPDATE actions SET status = ? WHERE id = ? AND status = ?",
+                (
+                    ActionStatus.EXECUTED.value,
+                    action_id,
+                    ActionStatus.PROCESSING.value,
+                ),
+            )
+            return cursor.rowcount == 1
+
+    def release_action(self, action_id: str, previous_status: str) -> bool:
+        if previous_status not in {
+            ActionStatus.READY.value,
+            ActionStatus.APPROVED.value,
+        }:
+            raise ValueError("Cannot release an action to an unsafe status")
+        with self.connect() as db:
+            cursor = db.execute(
+                "UPDATE actions SET status = ? WHERE id = ? AND status = ?",
+                (previous_status, action_id, ActionStatus.PROCESSING.value),
+            )
+            return cursor.rowcount == 1

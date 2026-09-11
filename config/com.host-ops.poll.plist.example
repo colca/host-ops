@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.host-ops.poll</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>__HOST_OPS_REPOSITORY__/scripts/run_host_ops.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__HOST_OPS_REPOSITORY__</string>
+  <key>StartInterval</key>
+  <integer>900</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__HOST_OPS_REPOSITORY__/var/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOST_OPS_REPOSITORY__/var/launchd.err.log</string>
+</dict>
+</plist>

@@ -51,6 +51,35 @@ this design. Production texting requires a programmable messaging service with
 delivery receipts and inbound webhooks. The current file outbox lets us finish
 the workflow and message wording before creating that external account.
 
+## Private calendar polling
+
+`poll-ical` reads the private export URL from the environment variable named in
+`config/property.json`, fetches it over HTTPS, and generates an idempotent
+cleaner work order for each stay. The URL is never written to the database or
+printed in errors. Run the one-shot command from a private cron or launchd
+configuration; polling every 15 minutes is a reasonable starting interval.
+
+```bash
+AIRBNB_ICAL_URL='private URL from Airbnb' \
+  PYTHONPATH=src python3 -m host_ops.cli --db var/host-ops.db poll-ical
+```
+
+The work order records the $160 base fee and the available $10 add-ons, but it
+does not authorize payment. Any later cleaner payment action remains behind the
+host approval gate.
+
+`scripts/run_host_ops.sh` performs one complete safe cycle: poll the calendar,
+deduplicate stays, and queue due cleaner work orders in the local file outbox.
+Use `scripts/render_launchd_plist.py` to create an ignored 15-minute macOS
+LaunchAgent definition. The definition contains repository paths but no private
+calendar URL or cleaner contact information.
+
+The cleaner outbox groups eligible turnover dates into one weekly digest for
+the next 60 days and queues one additional reminder the day before each
+cleaning. Stable weekly and per-date keys prevent duplicates when the scheduler
+runs every 15 minutes. The default schedule is Monday at 9:00 AM for the weekly
+digest and 9:00 AM the day before cleaning, interpreted in the property timezone.
+
 ## Private values still needed
 
 Store these only in `config/property.json`, environment variables, or a secret
@@ -61,3 +90,17 @@ manager:
 - Exact base turnover fee
 - Agreed fees or approval rules for common extras
 - Property timezone, check-in time, and checkout time
+
+## Local-demand pricing
+
+The reusable pricing engine uses the median of comparable nightly accommodation
+rates for regular and event nights. Nearby sports, concerts, conferences, and
+other demand signals identify dates that need a fresh market sample; event
+premiums default to zero and may be configured only from observed
+event-versus-regular market evidence. The one-property deployment can configure
+nearby venues privately, while the normalized input and calculation remain
+generic.
+
+Recommendations never change Airbnb rates directly. Each nightly proposal is
+stored as a high-risk `rate_change` action and requires host approval. Live
+updates require a separate authorized PMS or channel-manager adapter.

@@ -1,0 +1,47 @@
+{
+  "snapshot_id": "example-2026-09-01",
+  "listing_id": "example-listing",
+  "nights": [
+    {
+      "date": "2026-09-12",
+      "as_of_date": "2026-09-01",
+      "current_rate": 220,
+      "comparable_rates": [205, 215, 225, 240, 250],
+      "demand_signals": []
+    },
+    {
+      "date": "2026-09-13",
+      "as_of_date": "2026-09-01",
+      "current_rate": 220,
+      "comparable_rates": [230, 245, 250, 260, 275],
+      "demand_signals": [
+        {
+          "id": "venue-event-123",
+          "name": "Example stadium event",
+          "category": "sports",
+          "distance_miles": 0.5,
+          "importance": 0.9
+        },
+        {
+          "id": "conference-456",
+          "name": "Example convention",
+          "category": "conference",
+          "distance_miles": 1.5,
+          "importance": 0.7
+        }
+      ]
+    },
+    {
+      "date": "2026-09-14",
+      "as_of_date": "2026-09-01",
+      "current_rate": 220,
+      "comparable_rates": [],
+      "one_bedroom_comparable_rates": [175, 185, 195],
+      "one_to_two_bedroom_adjustment": {
+        "premium_percent": 18,
+        "evidence_count": 8
+      },
+      "demand_signals": []
+    }
+  ]
+}

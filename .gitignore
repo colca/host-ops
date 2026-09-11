@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 var/*.db
 var/*.jsonl
+var/*.plist
 config/property.json
 .secrets/
 .env
