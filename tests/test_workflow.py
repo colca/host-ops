@@ -614,6 +614,23 @@ END:VCALENDAR
             self.assertEqual("submitted", record["delivery_status"])
             self.assertEqual("SM-test-message", record["provider_message_id"])
 
+    def test_outbox_blocks_a_recipient_other_than_the_configured_contact(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "outbox.jsonl"
+            outbox = FileOutboxMessagingAdapter(path)
+            outbox.queue_once("+15555550199", "Test reminder", "test-reminder")
+            adapter = TwilioMessagingAdapter(
+                "AC-test", "private-test-token", "+15555550101"
+            )
+
+            with self.assertRaisesRegex(ValueError, "configured recipient"):
+                outbox.deliver_pending(
+                    adapter, allowed_recipient="+15555550100"
+                )
+
+            record = json.loads(path.read_text().strip())
+            self.assertEqual("not_sent", record["delivery_status"])
+
 
 
 if __name__ == "__main__":

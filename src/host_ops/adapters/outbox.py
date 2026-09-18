@@ -51,7 +51,9 @@ class FileOutboxMessagingAdapter:
             outbox.write(json.dumps(record, sort_keys=True) + "\n")
         return message_id, True
 
-    def deliver_pending(self, adapter: MessagingAdapter) -> int:
+    def deliver_pending(
+        self, adapter: MessagingAdapter, allowed_recipient: str | None = None
+    ) -> int:
         """Submit pending records, persisting a crash-visible sending state."""
         if not self.path.exists():
             return 0
@@ -62,6 +64,10 @@ class FileOutboxMessagingAdapter:
         for index, record in enumerate(records):
             if record.get("delivery_status") != "not_sent":
                 continue
+            if allowed_recipient and record.get("recipient") != allowed_recipient:
+                raise ValueError(
+                    "Pending SMS recipient does not match the configured recipient."
+                )
             record["delivery_status"] = "sending"
             self._replace_records(records)
             try:

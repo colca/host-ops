@@ -39,6 +39,7 @@ class AirbnbCalendarSettings:
 @dataclass(frozen=True)
 class CleanerMessagingSettings:
     provider: str = "file_outbox"
+    automatic_delivery_enabled: bool = False
     phone_environment_variable: str = "CLEANER_PHONE_NUMBER"
     name_environment_variable: str = "CLEANER_NAME"
     weekly_digest_weekday: int = 0
@@ -120,6 +121,9 @@ def load_config(path: str | Path) -> AppConfig:
     cleaner = data.get("integrations", {}).get("cleaner_messaging", {})
     messaging = CleanerMessagingSettings(
         provider=str(cleaner.get("provider", "file_outbox")),
+        automatic_delivery_enabled=bool(
+            cleaner.get("automatic_delivery_enabled", False)
+        ),
         phone_environment_variable=environment_variable_name(
             cleaner.get("phone_environment_variable", "CLEANER_PHONE_NUMBER"),
             "phone_environment_variable",

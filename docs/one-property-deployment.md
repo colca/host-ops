@@ -69,10 +69,16 @@ does not authorize payment. Any later cleaner payment action remains behind the
 host approval gate.
 
 `scripts/run_host_ops.sh` performs one complete safe cycle: poll the calendar,
-deduplicate stays, and queue due cleaner work orders in the local file outbox.
-Use `scripts/render_launchd_plist.py` to create an ignored 15-minute macOS
-LaunchAgent definition. The definition contains repository paths but no private
-calendar URL or cleaner contact information.
+deduplicate stays, queue due cleaner work orders in the local file outbox, and,
+when privately enabled, submit pending messages to Twilio. An atomic local lock
+prevents overlapping scheduler cycles. Live delivery accepts only the currently
+configured cleaner number, preventing stale queued messages from being sent to
+an earlier test recipient.
+Use `scripts/install_launchd.sh` to install a private runtime copy under
+`~/Library/Application Support/HostOps` and load its 15-minute macOS
+LaunchAgent. The definition contains runtime paths but no private calendar URL,
+credentials, or cleaner contact information. Run the installer again after
+changing code or private configuration.
 
 The cleaner outbox queues a reminder five days before each confirmed stay's
 check-in and another reminder the day before its checkout cleaning. Every text

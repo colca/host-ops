@@ -113,6 +113,7 @@ def main() -> None:
     )
     deliver.add_argument("--outbox", type=Path, default=DEFAULT_OUTBOX)
     deliver.add_argument("--confirm-live-delivery", action="store_true")
+    deliver.add_argument("--automatic", action="store_true")
     approve = subparsers.add_parser("approve", help="Approve one pending action")
     approve.add_argument("action_id")
     args = parser.parse_args()
@@ -202,8 +203,14 @@ def main() -> None:
         messaging = app_config.cleaner_messaging
         if messaging.provider != "twilio":
             raise SystemExit("Live delivery is disabled; provider is file_outbox.")
-        if not args.confirm_live_delivery:
+        if args.automatic and not messaging.automatic_delivery_enabled:
+            print("Automatic SMS delivery is disabled.")
+            return
+        if not args.confirm_live_delivery and not args.automatic:
             raise SystemExit("Pass --confirm-live-delivery to submit real SMS messages.")
+        recipient, _ = cleaner_contact(app_config)
+        if recipient == "configured-cleaner":
+            raise SystemExit("A cleaner phone number is required for live delivery.")
         try:
             adapter = TwilioMessagingAdapter(
                 account_sid=os.environ.get(
@@ -216,7 +223,11 @@ def main() -> None:
                     messaging.from_number_environment_variable, ""
                 ),
             )
-            delivered = FileOutboxMessagingAdapter(args.outbox).deliver_pending(adapter)
+            delivered = FileOutboxMessagingAdapter(args.outbox).deliver_pending(
+                adapter, allowed_recipient=recipient
+            )
+        except ValueError as error:
+            raise SystemExit(f"SMS delivery blocked: {error}") from error
         except SmsDeliveryError as error:
             raise SystemExit(f"SMS delivery failed: {error}") from error
         print(f"Submitted {delivered} SMS message(s).")

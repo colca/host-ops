@@ -37,6 +37,7 @@
     },
     "cleaner_messaging": {
       "provider": "file_outbox",
+      "automatic_delivery_enabled": false,
       "production_candidate": "twilio",
       "name_environment_variable": "CLEANER_NAME",
       "phone_environment_variable": "CLEANER_PHONE_NUMBER",

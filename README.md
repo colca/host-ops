@@ -81,21 +81,24 @@ To prepare Twilio later, set the provider to `twilio` only in the private
 PYTHONPATH=src python3 -m host_ops.cli deliver-outbox --confirm-live-delivery
 ```
 
-This delivery command is intentionally not part of the automatic polling
-script. A provider-accepted message is marked `submitted`; failed requests
-return it to `not_sent` without exposing credentials or message contents.
+Set `automatic_delivery_enabled` to `true` only in the private property
+configuration when the recipient has consented and the provider is ready. The
+15-minute polling script then delivers newly due reminders automatically. It
+refuses to send any queued record whose recipient differs from the currently
+configured cleaner. A provider-accepted message is marked `submitted`; failed
+requests return it to `not_sent` without exposing credentials or message
+contents.
 
-On macOS, render the 15-minute LaunchAgent definition without credentials:
+On macOS, install the private runtime copy and 15-minute LaunchAgent:
 
 ```bash
-python3 scripts/render_launchd_plist.py
-plutil -lint var/com.host-ops.poll.plist
+scripts/install_launchd.sh
 ```
 
-The rendered plist stays under ignored `var/`. Copy it to
-`~/Library/LaunchAgents/com.host-ops.poll.plist` and load it only when ready for
-continuous local polling. The service calls `scripts/run_host_ops.sh`, which
-loads the ignored `.env` at runtime.
+The installer copies the application and private configuration to
+`~/Library/Application Support/HostOps`, avoiding macOS background-access
+restrictions on Documents. It stores no credentials in the LaunchAgent. Run the
+installer again after code, private configuration, or credentials change.
 
 Approve an action using the ID shown by `actions`:
 
