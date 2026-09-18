@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -51,6 +52,7 @@ def run_due_cleaner_actions(
     now: datetime | None = None,
     recipient: str = "configured-cleaner",
     cleaner_name: str = "Cleaner",
+    recipients: list[tuple[str, str]] | None = None,
     property_timezone: str = "America/Los_Angeles",
     weekly_digest_weekday: int = 0,
     reminder_hour: int = 9,
@@ -73,6 +75,7 @@ def run_due_cleaner_actions(
     cleaning_dates = cleaning_dates_in_window(
         [check_out for _, check_out in stays], local_now.date()
     )
+    approved_recipients = recipients or [(recipient, cleaner_name)]
     queued = 0
     if local_now.hour >= reminder_hour:
         today = local_now.date()
@@ -80,27 +83,37 @@ def run_due_cleaner_actions(
             if check_out not in cleaning_dates:
                 continue
             if today == check_in - timedelta(days=5):
-                _, inserted = outbox.queue_once(
-                    recipient=recipient,
-                    body=cleaner_reminder_message(
-                        check_out,
-                        cleaning_dates,
-                        "Just a friendly reminder: our next guest checks in in 5 days, and cleaning is scheduled for {cleaning_date}.",
-                        cleaner_name,
-                    ),
-                    idempotency_key=f"cleaner-five-days-before-checkin:{check_in.isoformat()}",
-                )
-                queued += int(inserted)
+                for phone, name in approved_recipients:
+                    recipient_key = hashlib.sha256(phone.encode()).hexdigest()[:16]
+                    _, inserted = outbox.queue_once(
+                        recipient=phone,
+                        body=cleaner_reminder_message(
+                            check_out,
+                            cleaning_dates,
+                            "Just a friendly reminder: our next guest checks in in 5 days, and cleaning is scheduled for {cleaning_date}.",
+                            name,
+                        ),
+                        idempotency_key=(
+                            f"cleaner-five-days-before-checkin:{check_in.isoformat()}"
+                            f":recipient:{recipient_key}"
+                        ),
+                    )
+                    queued += int(inserted)
             if today == check_out - timedelta(days=1):
-                _, inserted = outbox.queue_once(
-                    recipient=recipient,
-                    body=cleaner_reminder_message(
-                        check_out,
-                        cleaning_dates,
-                        "Just a friendly reminder that cleaning is scheduled for tomorrow, {cleaning_date}.",
-                        cleaner_name,
-                    ),
-                    idempotency_key=f"cleaner-day-before:{check_out.isoformat()}",
-                )
-                queued += int(inserted)
+                for phone, name in approved_recipients:
+                    recipient_key = hashlib.sha256(phone.encode()).hexdigest()[:16]
+                    _, inserted = outbox.queue_once(
+                        recipient=phone,
+                        body=cleaner_reminder_message(
+                            check_out,
+                            cleaning_dates,
+                            "Just a friendly reminder that cleaning is scheduled for tomorrow, {cleaning_date}.",
+                            name,
+                        ),
+                        idempotency_key=(
+                            f"cleaner-day-before:{check_out.isoformat()}"
+                            f":recipient:{recipient_key}"
+                        ),
+                    )
+                    queued += int(inserted)
     return len(cleaning_dates), queued

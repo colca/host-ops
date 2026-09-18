@@ -42,6 +42,7 @@ class CleanerMessagingSettings:
     automatic_delivery_enabled: bool = False
     phone_environment_variable: str = "CLEANER_PHONE_NUMBER"
     name_environment_variable: str = "CLEANER_NAME"
+    recipients_environment_variable: str = "CLEANER_RECIPIENTS_JSON"
     weekly_digest_weekday: int = 0
     reminder_hour: int = 9
     account_sid_environment_variable: str = "TWILIO_ACCOUNT_SID"
@@ -132,6 +133,12 @@ def load_config(path: str | Path) -> AppConfig:
         name_environment_variable=environment_variable_name(
             cleaner.get("name_environment_variable", "CLEANER_NAME"),
             "name_environment_variable",
+        ),
+        recipients_environment_variable=environment_variable_name(
+            cleaner.get(
+                "recipients_environment_variable", "CLEANER_RECIPIENTS_JSON"
+            ),
+            "recipients_environment_variable",
         ),
         weekly_digest_weekday=int(cleaner.get("weekly_digest_weekday", 0)),
         reminder_hour=int(cleaner.get("reminder_hour", 9)),

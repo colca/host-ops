@@ -14,6 +14,7 @@ from host_ops.adapters.ical_poll import (
 )
 from host_ops.adapters.outbox import FileOutboxMessagingAdapter
 from host_ops.adapters.twilio import TwilioMessagingAdapter
+from host_ops.cli import cleaner_contacts
 from host_ops.config import AppConfig, PricingSettings, load_config
 from host_ops.models import ActionStatus, Event, ProposedAction
 from host_ops.pricing import recommend_nightly_rate
@@ -577,6 +578,68 @@ END:VCALENDAR
 
         self.assertEqual([date(2026, 9, 18), date(2026, 9, 20)], result)
 
+    def test_approved_recipient_list_requires_consent_and_unique_numbers(self) -> None:
+        config = AppConfig()
+        approved = json.dumps(
+            [
+                {"name": "Host", "phone": "+15555550100", "approved": True},
+                {"name": "Cleaner", "phone": "+15555550101", "approved": True},
+            ]
+        )
+        with patch.dict("os.environ", {"CLEANER_RECIPIENTS_JSON": approved}):
+            self.assertEqual(
+                [("+15555550100", "Host"), ("+15555550101", "Cleaner")],
+                cleaner_contacts(config),
+            )
+
+        unapproved = json.dumps(
+            [{"name": "Cleaner", "phone": "+15555550101", "approved": False}]
+        )
+        with patch.dict("os.environ", {"CLEANER_RECIPIENTS_JSON": unapproved}):
+            with self.assertRaisesRegex(SystemExit, "approved"):
+                cleaner_contacts(config)
+
+    def test_runner_queues_separate_copy_for_each_approved_recipient(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = SqliteStore(root / "test.db")
+            store.initialize()
+            event = Event(
+                type="calendar_stay_detected",
+                payload={
+                    "check_in": "2026-08-27T16:00:00-07:00",
+                    "check_out": "2026-09-01T11:00:00-07:00",
+                },
+            )
+            action = ProposedAction(
+                event_id=event.id,
+                type="cleaner_sms",
+                summary="Cleaner work order",
+                payload={"check_out": "2026-09-01T11:00:00-07:00"},
+                execute_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                idempotency_key="multi-recipient-action",
+            )
+            store.save_event_and_actions(event, [action])
+            outbox_path = root / "outbox.jsonl"
+
+            result = run_due_cleaner_actions(
+                store,
+                FileOutboxMessagingAdapter(outbox_path),
+                now=datetime(2026, 8, 22, 16, tzinfo=timezone.utc),
+                recipients=[
+                    ("+15555550100", "Host"),
+                    ("+15555550101", "Cleaner"),
+                ],
+            )
+
+            self.assertEqual((1, 2), result)
+            records = [json.loads(line) for line in outbox_path.read_text().splitlines()]
+            self.assertEqual(
+                {"+15555550100", "+15555550101"},
+                {record["recipient"] for record in records},
+            )
+            self.assertEqual(2, len({record["idempotency_key"] for record in records}))
+
     def test_runner_does_not_claim_future_or_pending_approval_actions(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -657,7 +720,7 @@ END:VCALENDAR
 
             with self.assertRaisesRegex(ValueError, "configured recipient"):
                 outbox.deliver_pending(
-                    adapter, allowed_recipient="+15555550100"
+                    adapter, allowed_recipients={"+15555550100"}
                 )
 
             record = json.loads(path.read_text().strip())

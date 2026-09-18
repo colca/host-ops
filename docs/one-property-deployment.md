@@ -86,6 +86,12 @@ contains all confirmed checkout/cleaning dates in the next 60 days. Stable
 per-stay keys prevent duplicates when the scheduler runs every 15 minutes. The
 default send time is 9:00 AM in the property timezone.
 
+`CLEANER_RECIPIENTS_JSON` may contain multiple explicitly approved contacts.
+Host Ops sends a private SMS copy to each contact rather than exposing phone
+numbers in a group thread. A per-recipient idempotency key prevents one contact
+from suppressing or duplicating another contact's reminder. If the list is not
+configured, the legacy cleaner name and phone variables remain supported.
+
 ## Private values still needed
 
 Store these only in `config/property.json`, environment variables, or a secret

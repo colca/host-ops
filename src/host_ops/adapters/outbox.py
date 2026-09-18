@@ -52,7 +52,7 @@ class FileOutboxMessagingAdapter:
         return message_id, True
 
     def deliver_pending(
-        self, adapter: MessagingAdapter, allowed_recipient: str | None = None
+        self, adapter: MessagingAdapter, allowed_recipients: set[str] | None = None
     ) -> int:
         """Submit pending records, persisting a crash-visible sending state."""
         if not self.path.exists():
@@ -64,7 +64,7 @@ class FileOutboxMessagingAdapter:
         for index, record in enumerate(records):
             if record.get("delivery_status") != "not_sent":
                 continue
-            if allowed_recipient and record.get("recipient") != allowed_recipient:
+            if allowed_recipients and record.get("recipient") not in allowed_recipients:
                 raise ValueError(
                     "Pending SMS recipient does not match the configured recipient."
                 )

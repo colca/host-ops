@@ -219,7 +219,7 @@ class FirestoreOutboxMessagingAdapter:
         return message_id, bool(queue(transaction))
 
     def deliver_pending(
-        self, adapter: Any, allowed_recipient: str | None = None
+        self, adapter: Any, allowed_recipients: set[str] | None = None
     ) -> int:
         from google.cloud import firestore
 
@@ -228,7 +228,7 @@ class FirestoreOutboxMessagingAdapter:
             record = snapshot.to_dict()
             if record.get("delivery_status") != "not_sent":
                 continue
-            if allowed_recipient and record.get("recipient") != allowed_recipient:
+            if allowed_recipients and record.get("recipient") not in allowed_recipients:
                 raise ValueError(
                     "Pending SMS recipient does not match the configured recipient."
                 )

@@ -32,15 +32,41 @@ DEFAULT_CONFIG = Path(os.environ.get("HOST_OPS_CONFIG_PATH", "config/property.js
 DEFAULT_OUTBOX = Path("var/cleaner-outbox.jsonl")
 
 
-def cleaner_contact(app_config: AppConfig) -> tuple[str, str]:
+def cleaner_contacts(app_config: AppConfig) -> list[tuple[str, str]]:
     settings = app_config.cleaner_messaging
+    raw_recipients = os.environ.get(settings.recipients_environment_variable, "").strip()
+    if raw_recipients:
+        try:
+            configured = json.loads(raw_recipients)
+        except json.JSONDecodeError as error:
+            raise SystemExit(
+                f"{settings.recipients_environment_variable} must be valid JSON."
+            ) from error
+        if not isinstance(configured, list) or not configured:
+            raise SystemExit(
+                f"{settings.recipients_environment_variable} must be a non-empty JSON list."
+            )
+        contacts: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for entry in configured:
+            if not isinstance(entry, dict) or entry.get("approved") is not True:
+                raise SystemExit("Every SMS recipient must explicitly set approved to true.")
+            phone = str(entry.get("phone", "")).strip()
+            name = str(entry.get("name", "Recipient")).strip() or "Recipient"
+            if not re.fullmatch(r"\+[1-9][0-9]{7,14}", phone):
+                raise SystemExit("Every approved SMS recipient must use E.164 format.")
+            if phone in seen:
+                raise SystemExit("Approved SMS recipient phone numbers must be unique.")
+            seen.add(phone)
+            contacts.append((phone, name))
+        return contacts
     phone = os.environ.get(settings.phone_environment_variable, "").strip()
     name = os.environ.get(settings.name_environment_variable, "Cleaner").strip()
     if phone and not re.fullmatch(r"\+[1-9][0-9]{7,14}", phone):
         raise SystemExit(
             f"{settings.phone_environment_variable} must use E.164 format."
         )
-    return phone or "configured-cleaner", name or "Cleaner"
+    return [(phone or "configured-cleaner", name or "Cleaner")]
 
 
 def demo_events() -> list[Event]:
@@ -210,15 +236,14 @@ def main() -> None:
         for stay in stays:
             event = stay.to_event()
             inserted += cloud_store.save_event_and_actions(event, engine.handle(event))
-        recipient, cleaner_name = cleaner_contact(app_config)
+        contacts = cleaner_contacts(app_config)
         cloud_outbox = FirestoreOutboxMessagingAdapter(
             cloud_store.client, app_config.property.id
         )
         cleaning_dates, queued = run_due_cleaner_actions(
             cloud_store,
             cloud_outbox,
-            recipient=recipient,
-            cleaner_name=cleaner_name,
+            recipients=contacts,
             property_timezone=app_config.property.timezone,
             weekly_digest_weekday=(
                 app_config.cleaner_messaging.weekly_digest_weekday
@@ -228,7 +253,7 @@ def main() -> None:
         delivered = 0
         messaging = app_config.cleaner_messaging
         if messaging.provider == "twilio" and messaging.automatic_delivery_enabled:
-            if recipient == "configured-cleaner":
+            if any(phone == "configured-cleaner" for phone, _ in contacts):
                 raise SystemExit("A cleaner phone number is required for live delivery.")
             try:
                 delivered = cloud_outbox.deliver_pending(
@@ -243,7 +268,7 @@ def main() -> None:
                             messaging.from_number_environment_variable, ""
                         ),
                     ),
-                    allowed_recipient=recipient,
+                    allowed_recipients={phone for phone, _ in contacts},
                 )
             except ValueError as error:
                 raise SystemExit(f"SMS delivery blocked: {error}") from error
@@ -260,11 +285,11 @@ def main() -> None:
         messaging = app_config.cleaner_messaging
         if messaging.provider != "twilio":
             raise SystemExit("Live delivery is disabled; provider is not Twilio.")
-        recipient, _ = cleaner_contact(app_config)
-        if recipient == "configured-cleaner":
+        contacts = cleaner_contacts(app_config)
+        if any(phone == "configured-cleaner" for phone, _ in contacts):
             raise SystemExit("A cleaner phone number is required for live delivery.")
         try:
-            TwilioMessagingAdapter(
+            adapter = TwilioMessagingAdapter(
                 account_sid=os.environ.get(
                     messaging.account_sid_environment_variable, ""
                 ),
@@ -274,22 +299,24 @@ def main() -> None:
                 from_number=os.environ.get(
                     messaging.from_number_environment_variable, ""
                 ),
-            ).send(
-                recipient,
-                "COYU | Host Ops cloud test: Cloud Run successfully reached "
-                "Twilio. No action is needed. Reply STOP to opt out.",
             )
+            for recipient, _ in contacts:
+                adapter.send(
+                    recipient,
+                    "COYU | Host Ops cloud test: Cloud Run successfully reached "
+                    "Twilio. No action is needed. Reply STOP to opt out.",
+                )
         except SmsDeliveryError as error:
             raise SystemExit(f"SMS delivery failed: {error}") from error
-        print("Twilio accepted one cloud test SMS.")
+        print(f"Twilio accepted {len(contacts)} cloud test SMS message(s).")
     elif args.command == "send-schedule-test-sms":
         if not args.confirm_live_delivery:
             raise SystemExit("Pass --confirm-live-delivery to submit a real test SMS.")
         messaging = app_config.cleaner_messaging
         if messaging.provider != "twilio":
             raise SystemExit("Live delivery is disabled; provider is not Twilio.")
-        recipient, cleaner_name = cleaner_contact(app_config)
-        if recipient == "configured-cleaner":
+        contacts = cleaner_contacts(app_config)
+        if any(phone == "configured-cleaner" for phone, _ in contacts):
             raise SystemExit("A cleaner phone number is required for live delivery.")
         try:
             url = calendar_url_from_environment(
@@ -306,14 +333,8 @@ def main() -> None:
         )
         if not cleaning_dates:
             raise SystemExit("No confirmed cleaning dates were found in the next 60 days.")
-        body = cleaner_reminder_message(
-            cleaning_dates[0],
-            cleaning_dates,
-            "This is a friendly test reminder. The next confirmed cleaning is scheduled for {cleaning_date}.",
-            cleaner_name,
-        )
         try:
-            TwilioMessagingAdapter(
+            adapter = TwilioMessagingAdapter(
                 account_sid=os.environ.get(
                     messaging.account_sid_environment_variable, ""
                 ),
@@ -323,12 +344,22 @@ def main() -> None:
                 from_number=os.environ.get(
                     messaging.from_number_environment_variable, ""
                 ),
-            ).send(recipient, body)
+            )
+            for recipient, recipient_name in contacts:
+                adapter.send(
+                    recipient,
+                    cleaner_reminder_message(
+                        cleaning_dates[0],
+                        cleaning_dates,
+                        "This is a friendly test reminder. The next confirmed cleaning is scheduled for {cleaning_date}.",
+                        recipient_name,
+                    ),
+                )
         except SmsDeliveryError as error:
             raise SystemExit(f"SMS delivery failed: {error}") from error
         print(
-            "Twilio accepted one schedule test SMS containing "
-            f"{len(cleaning_dates)} confirmed cleaning date(s)."
+            f"Twilio accepted {len(contacts)} schedule test SMS message(s) containing "
+            f"{len(cleaning_dates)} confirmed cleaning date(s) each."
         )
     elif args.command == "recommend-prices":
         snapshot = json.loads(args.path.read_text(encoding="utf-8"))
@@ -347,12 +378,11 @@ def main() -> None:
         else:
             raise SystemExit("Action is missing or is not pending approval.")
     elif args.command == "run-due":
-        recipient, cleaner_name = cleaner_contact(app_config)
+        contacts = cleaner_contacts(app_config)
         cleaning_dates, queued = run_due_cleaner_actions(
             store,
             FileOutboxMessagingAdapter(args.outbox),
-            recipient=recipient,
-            cleaner_name=cleaner_name,
+            recipients=contacts,
             property_timezone=app_config.property.timezone,
             weekly_digest_weekday=(
                 app_config.cleaner_messaging.weekly_digest_weekday
@@ -372,8 +402,8 @@ def main() -> None:
             return
         if not args.confirm_live_delivery and not args.automatic:
             raise SystemExit("Pass --confirm-live-delivery to submit real SMS messages.")
-        recipient, _ = cleaner_contact(app_config)
-        if recipient == "configured-cleaner":
+        contacts = cleaner_contacts(app_config)
+        if any(phone == "configured-cleaner" for phone, _ in contacts):
             raise SystemExit("A cleaner phone number is required for live delivery.")
         try:
             adapter = TwilioMessagingAdapter(
@@ -388,7 +418,7 @@ def main() -> None:
                 ),
             )
             delivered = FileOutboxMessagingAdapter(args.outbox).deliver_pending(
-                adapter, allowed_recipient=recipient
+                adapter, allowed_recipients={phone for phone, _ in contacts}
             )
         except ValueError as error:
             raise SystemExit(f"SMS delivery blocked: {error}") from error

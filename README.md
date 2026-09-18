@@ -63,6 +63,11 @@ Records remain `not_sent`; this command does not contact a cleaner or an SMS
 provider. Only eligible `ready` or explicitly `approved` actions can run.
 Set `CLEANER_NAME` and `CLEANER_PHONE_NUMBER` (in E.164 format) only in the
 ignored `.env`; tracked configuration stores only those variable names.
+For multiple consented recipients, set `CLEANER_RECIPIENTS_JSON` to a JSON list
+such as `[{"name":"Host","phone":"+15555550100","approved":true}]`.
+Every entry must explicitly set `approved` to `true`; the legacy single contact
+is used only when this list is absent. Each recipient receives a separate copy
+and has independent delivery and idempotency state.
 
 Cleaner reminders are queued five days before each confirmed stay's check-in
 and again the day before its checkout cleaning. Every reminder includes all

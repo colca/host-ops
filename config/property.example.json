@@ -41,6 +41,7 @@
       "production_candidate": "twilio",
       "name_environment_variable": "CLEANER_NAME",
       "phone_environment_variable": "CLEANER_PHONE_NUMBER",
+      "recipients_environment_variable": "CLEANER_RECIPIENTS_JSON",
       "weekly_digest_weekday": 0,
       "reminder_hour": 9,
       "account_sid_environment_variable": "TWILIO_ACCOUNT_SID",

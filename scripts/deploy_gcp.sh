@@ -46,6 +46,10 @@ for required_name in AIRBNB_ICAL_URL CLEANER_NAME CLEANER_PHONE_NUMBER \
   fi
 done
 
+if [ -z "${CLEANER_RECIPIENTS_JSON-}" ]; then
+  CLEANER_RECIPIENTS_JSON=$(python3 -c 'import json, os; print(json.dumps([{"name": os.environ["CLEANER_NAME"], "phone": os.environ["CLEANER_PHONE_NUMBER"], "approved": True}]))')
+fi
+
 gcloud config set project "$PROJECT_ID"
 gcloud services enable run.googleapis.com cloudscheduler.googleapis.com \
   firestore.googleapis.com secretmanager.googleapis.com \
@@ -98,6 +102,7 @@ put_secret() {
 put_secret host-ops-airbnb-ical-url "$AIRBNB_ICAL_URL"
 put_secret host-ops-cleaner-name "$CLEANER_NAME"
 put_secret host-ops-cleaner-phone "$CLEANER_PHONE_NUMBER"
+put_secret host-ops-cleaner-recipients "$CLEANER_RECIPIENTS_JSON"
 put_secret host-ops-twilio-auth-token "$TWILIO_AUTH_TOKEN"
 if ! gcloud secrets describe host-ops-property-config >/dev/null 2>&1; then
   gcloud secrets create host-ops-property-config --replication-policy automatic
@@ -121,7 +126,7 @@ gcloud run jobs deploy "$JOB_NAME" \
   --cpu 1 \
   --memory 512Mi \
   --set-env-vars "TWILIO_ACCOUNT_SID=$TWILIO_ACCOUNT_SID,TWILIO_FROM_NUMBER=$TWILIO_FROM_NUMBER" \
-  --set-secrets "/secrets/property.json=host-ops-property-config:latest,AIRBNB_ICAL_URL=host-ops-airbnb-ical-url:latest,CLEANER_NAME=host-ops-cleaner-name:latest,CLEANER_PHONE_NUMBER=host-ops-cleaner-phone:latest,TWILIO_AUTH_TOKEN=host-ops-twilio-auth-token:latest"
+  --set-secrets "/secrets/property.json=host-ops-property-config:latest,AIRBNB_ICAL_URL=host-ops-airbnb-ical-url:latest,CLEANER_NAME=host-ops-cleaner-name:latest,CLEANER_PHONE_NUMBER=host-ops-cleaner-phone:latest,CLEANER_RECIPIENTS_JSON=host-ops-cleaner-recipients:latest,TWILIO_AUTH_TOKEN=host-ops-twilio-auth-token:latest"
 
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 JOB_URI="https://run.googleapis.com/v2/projects/$PROJECT_NUMBER/locations/$REGION/jobs/$JOB_NAME:run"
