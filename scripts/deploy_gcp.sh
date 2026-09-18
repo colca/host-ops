@@ -35,6 +35,9 @@ fi
 
 set -a
 . ./.env
+if [ -f .secrets/recipients.env ]; then
+  . ./.secrets/recipients.env
+fi
 set +a
 
 for required_name in AIRBNB_ICAL_URL CLEANER_NAME CLEANER_PHONE_NUMBER \
