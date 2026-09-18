@@ -53,5 +53,15 @@ gcloud run jobs execute host-ops-cleaner-reminders --region us-west1 --wait
 gcloud run jobs executions list --job host-ops-cleaner-reminders --region us-west1
 ```
 
+To send one deliberate end-to-end test containing the current confirmed
+cleaning dates, temporarily override the job arguments. This command requires
+the explicit live-delivery flag and does not add a reminder to the automatic
+outbox:
+
+```bash
+gcloud run jobs execute host-ops-cleaner-reminders --region us-west1 --wait \
+  --args=send-schedule-test-sms,--confirm-live-delivery
+```
+
 Keep the Mac worker enabled until this test succeeds. Never operate both workers
 long-term, even though idempotency protection exists.

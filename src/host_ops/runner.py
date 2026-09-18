@@ -29,6 +29,22 @@ def cleaner_reminder_message(
     return "\n".join(lines)
 
 
+def cleaning_dates_in_window(
+    check_outs: list[date],
+    today: date,
+    window_days: int = REMINDER_WINDOW_DAYS,
+) -> list[date]:
+    """Return unique confirmed cleaning dates in the active reminder window."""
+    window_end = today + timedelta(days=window_days)
+    return sorted(
+        {
+            check_out
+            for check_out in check_outs
+            if today <= check_out <= window_end
+        }
+    )
+
+
 def run_due_cleaner_actions(
     store: object,
     outbox: object,
@@ -41,7 +57,6 @@ def run_due_cleaner_actions(
 ) -> tuple[int, int]:
     due_at = now or datetime.now(timezone.utc)
     local_now = due_at.astimezone(ZoneInfo(property_timezone))
-    window_end = local_now.date() + timedelta(days=REMINDER_WINDOW_DAYS)
     stays: list[tuple[date, date]] = []
     for row in store.list_cleaner_reminder_actions(due_at):
         action_payload = json.loads(row["payload"])
@@ -55,12 +70,9 @@ def run_due_cleaner_actions(
                     datetime.fromisoformat(str(check_out_value)).date(),
                 )
             )
-    cleaning_dates = sorted({check_out for _, check_out in stays})
-    cleaning_dates = [
-        cleaning_date
-        for cleaning_date in cleaning_dates
-        if local_now.date() <= cleaning_date <= window_end
-    ]
+    cleaning_dates = cleaning_dates_in_window(
+        [check_out for _, check_out in stays], local_now.date()
+    )
     queued = 0
     if local_now.hour >= reminder_hour:
         today = local_now.date()

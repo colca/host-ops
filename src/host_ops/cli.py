@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .adapters.ical import parse_ical, parse_ical_file
 from .adapters.ical_poll import (
@@ -17,7 +18,11 @@ from .adapters.outbox import FileOutboxMessagingAdapter
 from .adapters.twilio import SmsDeliveryError, TwilioMessagingAdapter
 from .config import AppConfig, load_config
 from .models import Event
-from .runner import run_due_cleaner_actions
+from .runner import (
+    cleaner_reminder_message,
+    cleaning_dates_in_window,
+    run_due_cleaner_actions,
+)
 from .store import SqliteStore
 from .workflow import WorkflowEngine
 
@@ -107,6 +112,11 @@ def main() -> None:
         "send-test-sms", help="Send one explicit connectivity test to the configured recipient"
     )
     test_sms.add_argument("--confirm-live-delivery", action="store_true")
+    schedule_test_sms = subparsers.add_parser(
+        "send-schedule-test-sms",
+        help="Send one explicit test containing live confirmed cleaning dates",
+    )
+    schedule_test_sms.add_argument("--confirm-live-delivery", action="store_true")
     recommend_prices = subparsers.add_parser(
         "recommend-prices",
         help="Create approval-gated nightly rate recommendations from a JSON snapshot",
@@ -272,6 +282,54 @@ def main() -> None:
         except SmsDeliveryError as error:
             raise SystemExit(f"SMS delivery failed: {error}") from error
         print("Twilio accepted one cloud test SMS.")
+    elif args.command == "send-schedule-test-sms":
+        if not args.confirm_live_delivery:
+            raise SystemExit("Pass --confirm-live-delivery to submit a real test SMS.")
+        messaging = app_config.cleaner_messaging
+        if messaging.provider != "twilio":
+            raise SystemExit("Live delivery is disabled; provider is not Twilio.")
+        recipient, cleaner_name = cleaner_contact(app_config)
+        if recipient == "configured-cleaner":
+            raise SystemExit("A cleaner phone number is required for live delivery.")
+        try:
+            url = calendar_url_from_environment(
+                app_config.airbnb_calendar.url_environment_variable
+            )
+            content = fetch_private_ical(
+                url, timeout_seconds=app_config.airbnb_calendar.timeout_seconds
+            )
+        except CalendarPollError as error:
+            raise SystemExit(f"Calendar poll failed: {error}") from error
+        today = datetime.now(ZoneInfo(app_config.property.timezone)).date()
+        cleaning_dates = cleaning_dates_in_window(
+            [stay.check_out.date() for stay in parse_ical(content)], today
+        )
+        if not cleaning_dates:
+            raise SystemExit("No confirmed cleaning dates were found in the next 60 days.")
+        body = cleaner_reminder_message(
+            cleaning_dates[0],
+            cleaning_dates,
+            "This is a friendly test reminder. The next confirmed cleaning is scheduled for {cleaning_date}.",
+            cleaner_name,
+        )
+        try:
+            TwilioMessagingAdapter(
+                account_sid=os.environ.get(
+                    messaging.account_sid_environment_variable, ""
+                ),
+                auth_token=os.environ.get(
+                    messaging.auth_token_environment_variable, ""
+                ),
+                from_number=os.environ.get(
+                    messaging.from_number_environment_variable, ""
+                ),
+            ).send(recipient, body)
+        except SmsDeliveryError as error:
+            raise SystemExit(f"SMS delivery failed: {error}") from error
+        print(
+            "Twilio accepted one schedule test SMS containing "
+            f"{len(cleaning_dates)} confirmed cleaning date(s)."
+        )
     elif args.command == "recommend-prices":
         snapshot = json.loads(args.path.read_text(encoding="utf-8"))
         if not isinstance(snapshot, dict):

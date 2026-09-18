@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -560,6 +560,22 @@ END:VCALENDAR
                 self.assertIn("Reply STOP", record)
             self.assertIn("checks in in 5 days", records[0])
             self.assertIn("scheduled for tomorrow", records[1])
+
+    def test_cleaning_dates_in_window_are_unique_sorted_and_bounded(self) -> None:
+        from host_ops.runner import cleaning_dates_in_window
+
+        result = cleaning_dates_in_window(
+            [
+                date(2026, 9, 20),
+                date(2026, 9, 18),
+                date(2026, 9, 20),
+                date(2026, 11, 18),
+                date(2026, 9, 17),
+            ],
+            date(2026, 9, 18),
+        )
+
+        self.assertEqual([date(2026, 9, 18), date(2026, 9, 20)], result)
 
     def test_runner_does_not_claim_future_or_pending_approval_actions(self) -> None:
         with TemporaryDirectory() as directory:
