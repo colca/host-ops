@@ -4,10 +4,6 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from .adapters.outbox import FileOutboxMessagingAdapter
-from .store import SqliteStore
-
-
 REMINDER_WINDOW_DAYS = 60
 
 
@@ -34,8 +30,8 @@ def cleaner_reminder_message(
 
 
 def run_due_cleaner_actions(
-    store: SqliteStore,
-    outbox: FileOutboxMessagingAdapter,
+    store: object,
+    outbox: object,
     now: datetime | None = None,
     recipient: str = "configured-cleaner",
     cleaner_name: str = "Cleaner",

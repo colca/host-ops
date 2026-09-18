@@ -401,6 +401,22 @@ END:VCALENDAR
         self.assertTrue(work_order["payment_requires_host_approval"])
         self.assertEqual(3, len(work_order["available_extras"]))
 
+    def test_airbnb_calendar_event_id_is_stable_across_cloud_polls(self) -> None:
+        calendar = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:stable-stay
+DTSTART;VALUE=DATE:20261001
+DTEND;VALUE=DATE:20261003
+SUMMARY:Reserved
+END:VEVENT
+END:VCALENDAR
+"""
+
+        first = parse_ical(calendar)[0].to_event()
+        second = parse_ical(calendar)[0].to_event()
+
+        self.assertEqual(first.id, second.id)
+
     def test_airbnb_calendar_ignores_unavailable_and_cancelled_periods(self) -> None:
         content = """BEGIN:VCALENDAR
 BEGIN:VEVENT

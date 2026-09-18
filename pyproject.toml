@@ -12,6 +12,9 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Host Ops contributors" }]
 dependencies = []
 
+[project.optional-dependencies]
+cloud = ["google-cloud-firestore>=2.21,<3"]
+
 [project.scripts]
 host-ops = "host_ops.cli:main"
 
@@ -20,4 +23,3 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-

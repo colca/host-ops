@@ -51,6 +51,7 @@ class CleanerMessagingSettings:
 
 @dataclass(frozen=True)
 class PropertySettings:
+    id: str = "default-property"
     timezone: str = "America/Los_Angeles"
 
 
@@ -153,9 +154,13 @@ def load_config(path: str | Path) -> AppConfig:
         raise ValueError("weekly_digest_weekday must be between 0 and 6")
     if messaging.reminder_hour not in range(24):
         raise ValueError("reminder_hour must be between 0 and 23")
+    property_data = data.get("property", {})
     property_settings = PropertySettings(
-        timezone=str(data.get("property", {}).get("timezone", "America/Los_Angeles"))
+        id=str(property_data.get("id", "default-property")),
+        timezone=str(property_data.get("timezone", "America/Los_Angeles")),
     )
+    if not property_settings.id.strip():
+        raise ValueError("property.id cannot be empty")
     try:
         ZoneInfo(property_settings.timezone)
     except ZoneInfoNotFoundError as error:

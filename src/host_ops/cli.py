@@ -23,7 +23,7 @@ from .workflow import WorkflowEngine
 
 
 DEFAULT_DB = Path("var/host-ops.db")
-DEFAULT_CONFIG = Path("config/property.json")
+DEFAULT_CONFIG = Path(os.environ.get("HOST_OPS_CONFIG_PATH", "config/property.json"))
 DEFAULT_OUTBOX = Path("var/cleaner-outbox.jsonl")
 
 
@@ -99,6 +99,10 @@ def main() -> None:
     subparsers.add_parser(
         "poll-ical", help="Fetch the private Airbnb iCal URL and import its stays"
     )
+    subparsers.add_parser(
+        "cloud-cycle",
+        help="Poll, queue, and deliver with durable Google Cloud Firestore state",
+    )
     recommend_prices = subparsers.add_parser(
         "recommend-prices",
         help="Create approval-gated nightly rate recommendations from a JSON snapshot",
@@ -166,6 +170,76 @@ def main() -> None:
             inserted += store.save_event_and_actions(event, engine.handle(event))
         print(f"Polled {len(stays)} calendar stay(s); created {inserted} action(s).")
         print_actions(store)
+    elif args.command == "cloud-cycle":
+        from google.cloud import firestore
+
+        from .adapters.firestore import (
+            FirestoreOutboxMessagingAdapter,
+            FirestoreStore,
+        )
+
+        cloud_store = FirestoreStore(firestore.Client(), app_config.property.id)
+        engine = WorkflowEngine(
+            cleaning=app_config.cleaning, pricing=app_config.pricing
+        )
+        try:
+            url = calendar_url_from_environment(
+                app_config.airbnb_calendar.url_environment_variable
+            )
+            content = fetch_private_ical(
+                url, timeout_seconds=app_config.airbnb_calendar.timeout_seconds
+            )
+        except CalendarPollError as error:
+            raise SystemExit(f"Calendar poll failed: {error}") from error
+        stays = parse_ical(content)
+        inserted = 0
+        for stay in stays:
+            event = stay.to_event()
+            inserted += cloud_store.save_event_and_actions(event, engine.handle(event))
+        recipient, cleaner_name = cleaner_contact(app_config)
+        cloud_outbox = FirestoreOutboxMessagingAdapter(
+            cloud_store.client, app_config.property.id
+        )
+        cleaning_dates, queued = run_due_cleaner_actions(
+            cloud_store,
+            cloud_outbox,
+            recipient=recipient,
+            cleaner_name=cleaner_name,
+            property_timezone=app_config.property.timezone,
+            weekly_digest_weekday=(
+                app_config.cleaner_messaging.weekly_digest_weekday
+            ),
+            reminder_hour=app_config.cleaner_messaging.reminder_hour,
+        )
+        delivered = 0
+        messaging = app_config.cleaner_messaging
+        if messaging.provider == "twilio" and messaging.automatic_delivery_enabled:
+            if recipient == "configured-cleaner":
+                raise SystemExit("A cleaner phone number is required for live delivery.")
+            try:
+                delivered = cloud_outbox.deliver_pending(
+                    TwilioMessagingAdapter(
+                        account_sid=os.environ.get(
+                            messaging.account_sid_environment_variable, ""
+                        ),
+                        auth_token=os.environ.get(
+                            messaging.auth_token_environment_variable, ""
+                        ),
+                        from_number=os.environ.get(
+                            messaging.from_number_environment_variable, ""
+                        ),
+                    ),
+                    allowed_recipient=recipient,
+                )
+            except ValueError as error:
+                raise SystemExit(f"SMS delivery blocked: {error}") from error
+            except SmsDeliveryError as error:
+                raise SystemExit(f"SMS delivery failed: {error}") from error
+        print(
+            f"Cloud cycle polled {len(stays)} stay(s), created {inserted} action(s), "
+            f"found {cleaning_dates} cleaning date(s), queued {queued} reminder(s), "
+            f"and submitted {delivered} SMS message(s)."
+        )
     elif args.command == "recommend-prices":
         snapshot = json.loads(args.path.read_text(encoding="utf-8"))
         if not isinstance(snapshot, dict):

@@ -100,6 +100,12 @@ The installer copies the application and private configuration to
 restrictions on Documents. It stores no credentials in the LaunchAgent. Run the
 installer again after code, private configuration, or credentials change.
 
+For operation without an always-online Mac, deploy the Firestore-backed Cloud
+Run Job on a six-hour schedule. See
+[Google Cloud deployment](docs/google-cloud-deployment.md). The cloud worker
+uses durable reminder and SMS idempotency state and keeps all private values in
+Secret Manager.
+
 Approve an action using the ID shown by `actions`:
 
 ```bash

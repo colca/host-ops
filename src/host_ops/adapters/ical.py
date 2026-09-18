@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 
 from ..models import Event
 
@@ -17,6 +18,7 @@ class CalendarStay:
     def to_event(self) -> Event:
         return Event(
             type="calendar_stay_detected",
+            id=str(uuid5(NAMESPACE_URL, f"airbnb-ical:{self.uid}")),
             payload={
                 "stay_id": self.uid,
                 "check_in": self.check_in.isoformat(),
