@@ -103,6 +103,10 @@ def main() -> None:
         "cloud-cycle",
         help="Poll, queue, and deliver with durable Google Cloud Firestore state",
     )
+    test_sms = subparsers.add_parser(
+        "send-test-sms", help="Send one explicit connectivity test to the configured recipient"
+    )
+    test_sms.add_argument("--confirm-live-delivery", action="store_true")
     recommend_prices = subparsers.add_parser(
         "recommend-prices",
         help="Create approval-gated nightly rate recommendations from a JSON snapshot",
@@ -240,6 +244,34 @@ def main() -> None:
             f"found {cleaning_dates} cleaning date(s), queued {queued} reminder(s), "
             f"and submitted {delivered} SMS message(s)."
         )
+    elif args.command == "send-test-sms":
+        if not args.confirm_live_delivery:
+            raise SystemExit("Pass --confirm-live-delivery to submit a real test SMS.")
+        messaging = app_config.cleaner_messaging
+        if messaging.provider != "twilio":
+            raise SystemExit("Live delivery is disabled; provider is not Twilio.")
+        recipient, _ = cleaner_contact(app_config)
+        if recipient == "configured-cleaner":
+            raise SystemExit("A cleaner phone number is required for live delivery.")
+        try:
+            TwilioMessagingAdapter(
+                account_sid=os.environ.get(
+                    messaging.account_sid_environment_variable, ""
+                ),
+                auth_token=os.environ.get(
+                    messaging.auth_token_environment_variable, ""
+                ),
+                from_number=os.environ.get(
+                    messaging.from_number_environment_variable, ""
+                ),
+            ).send(
+                recipient,
+                "COYU | Host Ops cloud test: Cloud Run successfully reached "
+                "Twilio. No action is needed. Reply STOP to opt out.",
+            )
+        except SmsDeliveryError as error:
+            raise SystemExit(f"SMS delivery failed: {error}") from error
+        print("Twilio accepted one cloud test SMS.")
     elif args.command == "recommend-prices":
         snapshot = json.loads(args.path.read_text(encoding="utf-8"))
         if not isinstance(snapshot, dict):
