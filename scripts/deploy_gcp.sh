@@ -49,7 +49,8 @@ done
 gcloud config set project "$PROJECT_ID"
 gcloud services enable run.googleapis.com cloudscheduler.googleapis.com \
   firestore.googleapis.com secretmanager.googleapis.com \
-  artifactregistry.googleapis.com cloudbuild.googleapis.com
+  artifactregistry.googleapis.com cloudbuild.googleapis.com \
+  cloudresourcemanager.googleapis.com
 
 if ! gcloud artifacts repositories describe "$REPOSITORY_NAME" \
   --location "$REGION" >/dev/null 2>&1; then
@@ -83,6 +84,12 @@ put_secret() {
   secret_value=$2
   if ! gcloud secrets describe "$secret_name" >/dev/null 2>&1; then
     gcloud secrets create "$secret_name" --replication-policy automatic
+  else
+    current_value=$(gcloud secrets versions access latest \
+      --secret "$secret_name" 2>/dev/null || true)
+    if [ "$current_value" = "$secret_value" ]; then
+      return
+    fi
   fi
   printf '%s' "$secret_value" | \
     gcloud secrets versions add "$secret_name" --data-file=- >/dev/null
@@ -95,8 +102,13 @@ put_secret host-ops-twilio-auth-token "$TWILIO_AUTH_TOKEN"
 if ! gcloud secrets describe host-ops-property-config >/dev/null 2>&1; then
   gcloud secrets create host-ops-property-config --replication-policy automatic
 fi
-gcloud secrets versions add host-ops-property-config \
-  --data-file=config/property.json >/dev/null
+property_config=$(cat config/property.json)
+current_property_config=$(gcloud secrets versions access latest \
+  --secret host-ops-property-config 2>/dev/null || true)
+if [ "$current_property_config" != "$property_config" ]; then
+  printf '%s' "$property_config" | gcloud secrets versions add \
+    host-ops-property-config --data-file=- >/dev/null
+fi
 
 gcloud builds submit --tag "$IMAGE" .
 gcloud run jobs deploy "$JOB_NAME" \

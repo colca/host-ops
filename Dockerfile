@@ -2,7 +2,8 @@ FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    HOST_OPS_CONFIG_PATH=/secrets/property.json
+    HOST_OPS_CONFIG_PATH=/secrets/property.json \
+    HOST_OPS_DB_PATH=/tmp/host-ops.db
 
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./

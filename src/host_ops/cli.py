@@ -22,7 +22,7 @@ from .store import SqliteStore
 from .workflow import WorkflowEngine
 
 
-DEFAULT_DB = Path("var/host-ops.db")
+DEFAULT_DB = Path(os.environ.get("HOST_OPS_DB_PATH", "var/host-ops.db"))
 DEFAULT_CONFIG = Path(os.environ.get("HOST_OPS_CONFIG_PATH", "config/property.json"))
 DEFAULT_OUTBOX = Path("var/cleaner-outbox.jsonl")
 
