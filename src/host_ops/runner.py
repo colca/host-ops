@@ -82,6 +82,23 @@ def run_due_cleaner_actions(
         for check_in, check_out in sorted(set(stays)):
             if check_out not in cleaning_dates:
                 continue
+            if today == check_in - timedelta(days=30):
+                for phone, name in approved_recipients:
+                    recipient_key = hashlib.sha256(phone.encode()).hexdigest()[:16]
+                    _, inserted = outbox.queue_once(
+                        recipient=phone,
+                        body=cleaner_reminder_message(
+                            check_out,
+                            cleaning_dates,
+                            "Just a friendly reminder and early heads-up: our next guest checks in in 30 days, and cleaning is scheduled for {cleaning_date}.",
+                            name,
+                        ),
+                        idempotency_key=(
+                            f"cleaner-thirty-days-before-checkin:{check_in.isoformat()}"
+                            f":recipient:{recipient_key}"
+                        ),
+                    )
+                    queued += int(inserted)
             if today == check_in - timedelta(days=5):
                 for phone, name in approved_recipients:
                     recipient_key = hashlib.sha256(phone.encode()).hexdigest()[:16]

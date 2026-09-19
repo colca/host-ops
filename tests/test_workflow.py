@@ -489,7 +489,7 @@ END:VCALENDAR
 
         self.assertIn("BEGIN:VCALENDAR", content)
 
-    def test_five_day_and_day_before_reminders_include_all_confirmed_dates(self) -> None:
+    def test_thirty_day_five_day_and_day_before_reminders_include_all_dates(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             store = SqliteStore(root / "test.db")
@@ -538,6 +538,9 @@ END:VCALENDAR
             store.save_event_and_actions(later_event, [later_action])
             outbox = FileOutboxMessagingAdapter(root / "outbox.jsonl")
 
+            early = run_due_cleaner_actions(
+                store, outbox, now=datetime(2026, 7, 28, 16, tzinfo=timezone.utc)
+            )
             first = run_due_cleaner_actions(
                 store, outbox, now=datetime(2026, 8, 22, 16, tzinfo=timezone.utc)
             )
@@ -548,19 +551,21 @@ END:VCALENDAR
                 store, outbox, now=datetime(2026, 8, 31, 16, tzinfo=timezone.utc)
             )
 
+            self.assertEqual((2, 1), early)
             self.assertEqual((2, 1), first)
             self.assertEqual((2, 0), second)
             self.assertEqual((2, 1), day_before)
             records = (root / "outbox.jsonl").read_text().splitlines()
-            self.assertEqual(2, len(records))
+            self.assertEqual(3, len(records))
             for record in records:
                 self.assertIn("September 1, 2026", record)
                 self.assertIn("September 10, 2026", record)
                 self.assertIn("friendly reminder", record)
                 self.assertIn("COYU | Host Ops cleaner scheduling", record)
                 self.assertIn("Reply STOP", record)
-            self.assertIn("checks in in 5 days", records[0])
-            self.assertIn("scheduled for tomorrow", records[1])
+            self.assertIn("checks in in 30 days", records[0])
+            self.assertIn("checks in in 5 days", records[1])
+            self.assertIn("scheduled for tomorrow", records[2])
 
     def test_cleaning_dates_in_window_are_unique_sorted_and_bounded(self) -> None:
         from host_ops.runner import cleaning_dates_in_window

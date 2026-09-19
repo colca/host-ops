@@ -17,7 +17,7 @@ not a condition of purchasing goods or services.
 ## Message frequency and charges
 
 Message frequency varies with the reservation schedule. Messages are generally
-sent five days before a guest's check-in and one day before the related checkout
+sent 30 days and five days before a guest's check-in and one day before the related checkout
 cleaning. Message and data rates may apply.
 
 ## Opt-out and help

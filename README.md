@@ -69,8 +69,8 @@ Every entry must explicitly set `approved` to `true`; the legacy single contact
 is used only when this list is absent. Each recipient receives a separate copy
 and has independent delivery and idempotency state.
 
-Cleaner reminders are queued five days before each confirmed stay's check-in
-and again the day before its checkout cleaning. Every reminder includes all
+Cleaner reminders are queued 30 days and five days before each confirmed
+stay's check-in, and again the day before its checkout cleaning. Every reminder includes all
 confirmed checkout/cleaning dates in the next 60 days. Stable per-stay keys
 prevent duplicates when polling repeatedly. By default, reminders use 9:00 AM
 in the property's IANA timezone.
