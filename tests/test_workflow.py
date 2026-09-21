@@ -257,20 +257,30 @@ class WorkflowEngineTest(unittest.TestCase):
         self.assertEqual(485, recommendation.recommended_rate)
         self.assertEqual(485, recommendation.venue_minimum_rate)
 
-    def test_pricing_applies_configured_last_minute_discount(self) -> None:
-        recommendation = recommend_nightly_rate(
-            {
-                "date": "2026-09-13",
-                "as_of_date": "2026-09-09",
-                "current_rate": 217,
-                "comparable_rates": [197, 207, 217, 227, 237],
-                "demand_signals": [],
-            },
-            PricingSettings(),
-        )
+    def test_pricing_applies_graduated_last_minute_discounts(self) -> None:
+        expected_by_date = {
+            "2026-10-09": 5,
+            "2026-09-23": 10,
+            "2026-09-16": 15,
+            "2026-09-12": 20,
+        }
+        for stay_date, expected_discount in expected_by_date.items():
+            with self.subTest(stay_date=stay_date):
+                recommendation = recommend_nightly_rate(
+                    {
+                        "date": stay_date,
+                        "as_of_date": "2026-09-09",
+                        "current_rate": 217,
+                        "comparable_rates": [197, 207, 217, 227, 237],
+                        "demand_signals": [],
+                    },
+                    PricingSettings(),
+                )
 
-        self.assertEqual(20, recommendation.last_minute_discount_percent)
-        self.assertEqual(217, recommendation.recommended_rate)
+                self.assertEqual(
+                    expected_discount, recommendation.last_minute_discount_percent
+                )
+                self.assertEqual(217, recommendation.recommended_rate)
 
     def test_last_minute_discount_creates_separate_discount_action(self) -> None:
         event = Event(
@@ -279,7 +289,7 @@ class WorkflowEngineTest(unittest.TestCase):
                 "snapshot_id": "snapshot-promo",
                 "listing_id": "listing-1",
                 "nights": [{
-                    "date": "2026-09-13",
+                    "date": "2026-09-12",
                     "as_of_date": "2026-09-09",
                     "current_rate": 217,
                     "comparable_rates": [197, 207, 217, 227, 237],
@@ -297,7 +307,7 @@ class WorkflowEngineTest(unittest.TestCase):
     def test_pricing_does_not_discount_outside_last_minute_window(self) -> None:
         recommendation = recommend_nightly_rate(
             {
-                "date": "2026-09-15",
+                "date": "2026-10-10",
                 "as_of_date": "2026-09-09",
                 "current_rate": 217,
                 "comparable_rates": [197, 207, 217, 227, 237],

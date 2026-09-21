@@ -16,9 +16,10 @@ For each night:
    when it was derived from observed event-versus-regular market data.
 3. Weight each contribution by event importance and distance from the listing.
 4. Cap the combined event premium.
-5. When `as_of_date` places the stay inside the configured last-minute window,
-   propose the configured native last-minute discount without reducing the base
-   nightly rate.
+5. When `as_of_date` places the stay inside a configured last-minute tier,
+   propose its native promotion without reducing the base nightly rate. The
+   default ladder is 5% within 30 days, 10% within 14 days, 15% within 7 days,
+   and 20% within 3 days.
 6. Apply the configured nightly floor, ceiling, and maximum change from the
    listing's current rate.
 7. Create a `rate_change` action with the inputs and calculation attached.
@@ -54,7 +55,7 @@ The `pricing` section controls:
 - maximum recommendation change relative to the current rate;
 - maximum combined nearby-event premium;
 - event influence radius;
-- last-minute window and discount percentage;
+- graduated last-minute promotion windows and percentages;
 - premium percentages for sports, concerts, conferences, and other categories.
 
 Host Ops prefers five same-size comparables and accepts three or four with a

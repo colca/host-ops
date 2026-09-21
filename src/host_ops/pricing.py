@@ -137,8 +137,12 @@ def recommend_nightly_rate(
         except ValueError as error:
             raise ValueError("as_of_date must use YYYY-MM-DD format") from error
         days_until_stay = (stay_date - as_of_date).days
-        if 0 < days_until_stay <= settings.last_minute_window_days:
-            discount = settings.last_minute_discount_percent
+        if days_until_stay > 0:
+            for window_days, discount_percent in sorted(
+                settings.last_minute_discount_tiers, reverse=True
+            ):
+                if days_until_stay <= window_days:
+                    discount = discount_percent
 
     # Promotions are intentionally kept separate from the nightly rate. Channel
     # adapters can therefore create a visible native promotion instead of

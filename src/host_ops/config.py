@@ -60,6 +60,10 @@ def default_event_category_premiums() -> dict[str, float]:
     return {"sports": 0.0, "concert": 0.0, "conference": 0.0, "other": 0.0}
 
 
+def default_last_minute_discount_tiers() -> tuple[tuple[int, float], ...]:
+    return ((30, 5.0), (14, 10.0), (7, 15.0), (3, 20.0))
+
+
 @dataclass(frozen=True)
 class PricingSettings:
     minimum_nightly_rate: float = 75.0
@@ -70,8 +74,9 @@ class PricingSettings:
     minimum_comparable_count: int = 3
     preferred_comparable_count: int = 5
     minimum_rate_by_venue: dict[str, float] = field(default_factory=dict)
-    last_minute_window_days: int = 5
-    last_minute_discount_percent: float = 20.0
+    last_minute_discount_tiers: tuple[tuple[int, float], ...] = field(
+        default_factory=default_last_minute_discount_tiers
+    )
     event_category_premiums: dict[str, float] = field(
         default_factory=default_event_category_premiums
     )
@@ -193,6 +198,25 @@ def load_config(path: str | Path) -> AppConfig:
         )
         for venue, value in raw_venue_floors.items()
     }
+    raw_discount_tiers = pricing_data.get(
+        "last_minute_discount_tiers",
+        [
+            {"days": days, "percent": percent}
+            for days, percent in default_last_minute_discount_tiers()
+        ],
+    )
+    if not isinstance(raw_discount_tiers, list):
+        raise ValueError("last_minute_discount_tiers must be a list")
+    discount_tiers = tuple(
+        (
+            int(required(tier, "days")),
+            non_negative_money(required(tier, "percent"), f"discount tier {index}"),
+        )
+        for index, tier in enumerate(raw_discount_tiers)
+        if isinstance(tier, dict)
+    )
+    if len(discount_tiers) != len(raw_discount_tiers):
+        raise ValueError("each last-minute discount tier must be an object")
     pricing = PricingSettings(
         minimum_nightly_rate=non_negative_money(
             pricing_data.get("minimum_nightly_rate", 75), "minimum_nightly_rate"
@@ -214,11 +238,7 @@ def load_config(path: str | Path) -> AppConfig:
             pricing_data.get("preferred_comparable_count", 5)
         ),
         minimum_rate_by_venue=venue_floors,
-        last_minute_window_days=int(pricing_data.get("last_minute_window_days", 5)),
-        last_minute_discount_percent=non_negative_money(
-            pricing_data.get("last_minute_discount_percent", 20),
-            "last_minute_discount_percent",
-        ),
+        last_minute_discount_tiers=discount_tiers,
         event_category_premiums=category_premiums,
     )
     if pricing.minimum_nightly_rate <= 0:
@@ -235,10 +255,20 @@ def load_config(path: str | Path) -> AppConfig:
         )
     if any(rate > pricing.maximum_nightly_rate for rate in venue_floors.values()):
         raise ValueError("venue minimum rates cannot exceed maximum_nightly_rate")
-    if pricing.last_minute_window_days < 0:
-        raise ValueError("last_minute_window_days cannot be negative")
-    if pricing.last_minute_discount_percent > 100:
-        raise ValueError("last_minute_discount_percent cannot exceed 100")
+    if not pricing.last_minute_discount_tiers:
+        raise ValueError("last_minute_discount_tiers cannot be empty")
+    tier_days = [days for days, _ in pricing.last_minute_discount_tiers]
+    tier_discounts = [percent for _, percent in pricing.last_minute_discount_tiers]
+    if any(days <= 0 for days in tier_days):
+        raise ValueError("last-minute discount tier days must be positive")
+    if len(set(tier_days)) != len(tier_days):
+        raise ValueError("last-minute discount tier days must be unique")
+    ordered_tiers = sorted(pricing.last_minute_discount_tiers, reverse=True)
+    ordered_discounts = [percent for _, percent in ordered_tiers]
+    if any(percent > 100 for percent in tier_discounts):
+        raise ValueError("last-minute discount tier percent cannot exceed 100")
+    if ordered_discounts != sorted(ordered_discounts):
+        raise ValueError("discount percentages must increase as the stay gets closer")
     return AppConfig(
         cleaning=settings,
         property=property_settings,
