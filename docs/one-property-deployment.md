@@ -80,7 +80,7 @@ LaunchAgent. The definition contains runtime paths but no private calendar URL,
 credentials, or cleaner contact information. Run the installer again after
 changing code or private configuration.
 
-The cleaner outbox queues reminders 30 days and five days before each confirmed
+The cleaner outbox queues reminders 14 days and five days before each confirmed
 stay's check-in and another reminder the day before its checkout cleaning. Every text
 contains all confirmed checkout/cleaning dates in the next 60 days. Stable
 per-stay keys prevent duplicates when the scheduler runs every 15 minutes. The

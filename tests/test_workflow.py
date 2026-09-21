@@ -489,7 +489,7 @@ END:VCALENDAR
 
         self.assertIn("BEGIN:VCALENDAR", content)
 
-    def test_thirty_day_five_day_and_day_before_reminders_include_all_dates(self) -> None:
+    def test_fourteen_day_five_day_and_day_before_reminders_include_all_dates(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             store = SqliteStore(root / "test.db")
@@ -539,7 +539,7 @@ END:VCALENDAR
             outbox = FileOutboxMessagingAdapter(root / "outbox.jsonl")
 
             early = run_due_cleaner_actions(
-                store, outbox, now=datetime(2026, 7, 28, 16, tzinfo=timezone.utc)
+                store, outbox, now=datetime(2026, 8, 13, 16, tzinfo=timezone.utc)
             )
             first = run_due_cleaner_actions(
                 store, outbox, now=datetime(2026, 8, 22, 16, tzinfo=timezone.utc)
@@ -563,7 +563,7 @@ END:VCALENDAR
                 self.assertIn("friendly reminder", record)
                 self.assertIn("COYU | Host Ops cleaner scheduling", record)
                 self.assertIn("Reply STOP", record)
-            self.assertIn("checks in in 30 days", records[0])
+            self.assertIn("checks in in 14 days", records[0])
             self.assertIn("checks in in 5 days", records[1])
             self.assertIn("scheduled for tomorrow", records[2])
 
