@@ -274,6 +274,13 @@ def main() -> None:
                 raise SystemExit(f"SMS delivery blocked: {error}") from error
             except SmsDeliveryError as error:
                 raise SystemExit(f"SMS delivery failed: {error}") from error
+        cloud_store.record_cloud_cycle(
+            stays_polled=len(stays),
+            actions_created=inserted,
+            cleaning_dates=cleaning_dates,
+            reminders_queued=queued,
+            messages_submitted=delivered,
+        )
         print(
             f"Cloud cycle polled {len(stays)} stay(s), created {inserted} action(s), "
             f"found {cleaning_dates} cleaning date(s), queued {queued} reminder(s), "

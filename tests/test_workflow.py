@@ -16,6 +16,7 @@ from host_ops.adapters.outbox import FileOutboxMessagingAdapter
 from host_ops.adapters.twilio import TwilioMessagingAdapter
 from host_ops.cli import cleaner_contacts
 from host_ops.config import AppConfig, PricingSettings, load_config
+from host_ops.dashboard import render_dashboard
 from host_ops.models import ActionStatus, Event, ProposedAction
 from host_ops.pricing import recommend_nightly_rate
 from host_ops.runner import run_due_cleaner_actions
@@ -695,6 +696,38 @@ END:VCALENDAR
             records = outbox_path.read_text().splitlines()
             self.assertEqual(2, len(records))
             self.assertTrue(all("checks in today" in record for record in records))
+
+    def test_dashboard_hides_private_message_fields(self) -> None:
+        page = render_dashboard(
+            {
+                "generated_at": "2026-09-21T18:00:00+00:00",
+                "runs": [
+                    {
+                        "completed_at": "2026-09-21T17:00:00+00:00",
+                        "status": "succeeded",
+                        "stays_polled": 5,
+                        "reminders_queued": 2,
+                        "messages_submitted": 2,
+                    }
+                ],
+                "messages": [
+                    {
+                        "created_at": "2026-09-21T17:00:00+00:00",
+                        "idempotency_key": "cleaner-last-minute-booking:2026-09-21:recipient:private",
+                        "delivery_status": "submitted",
+                        "recipient": "+15555550100",
+                        "body": "private message body",
+                    }
+                ],
+                "message_counts": {"submitted": 1},
+                "cleaning_dates": [date(2026, 9, 25)],
+            }
+        )
+
+        self.assertIn("Last-minute reminder", page)
+        self.assertIn("Sep 25, 2026", page)
+        self.assertNotIn("+15555550100", page)
+        self.assertNotIn("private message body", page)
 
     def test_runner_does_not_claim_future_or_pending_approval_actions(self) -> None:
         with TemporaryDirectory() as directory:

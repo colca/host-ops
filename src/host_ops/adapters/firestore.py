@@ -29,6 +29,7 @@ class FirestoreStore:
         self.events = client.collection(f"{prefix}_events")
         self.actions = client.collection(f"{prefix}_actions")
         self.action_keys = client.collection(f"{prefix}_action_keys")
+        self.runs = client.collection(f"{prefix}_run_history")
 
     def initialize(self) -> None:
         return None
@@ -104,6 +105,29 @@ class FirestoreStore:
                 str(row.get("execute_at") or row.get("created_at")),
                 str(row.get("created_at")),
             ),
+        )
+
+    def record_cloud_cycle(
+        self,
+        *,
+        stays_polled: int,
+        actions_created: int,
+        cleaning_dates: int,
+        reminders_queued: int,
+        messages_submitted: int,
+    ) -> None:
+        """Persist a sanitized operational summary for the read-only dashboard."""
+        completed_at = datetime.now(timezone.utc)
+        self.runs.document(completed_at.strftime("%Y%m%dT%H%M%S.%fZ")).set(
+            {
+                "completed_at": completed_at.isoformat(),
+                "status": "succeeded",
+                "stays_polled": stays_polled,
+                "actions_created": actions_created,
+                "cleaning_dates": cleaning_dates,
+                "reminders_queued": reminders_queued,
+                "messages_submitted": messages_submitted,
+            }
         )
 
     def approve(self, action_id: str) -> bool:

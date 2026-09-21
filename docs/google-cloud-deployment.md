@@ -19,6 +19,14 @@ At four executions per day, normal one-property usage should remain well within
 the relevant free quotas. Google Cloud billing must still be enabled, and users
 should create a small budget alert before deployment.
 
+## Optional mobile dashboard
+
+A separate read-only Cloud Run service can present sanitized poll summaries,
+upcoming cleaning dates, and SMS delivery states in a phone-friendly page. The
+rendered page excludes names, phone numbers, message bodies, provider IDs,
+credentials, and the private calendar URL. Keep the service behind
+Identity-Aware Proxy and grant access only to approved Google accounts.
+
 ## Safety properties
 
 - Firestore document IDs enforce stable per-reminder idempotency.
