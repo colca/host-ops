@@ -85,6 +85,10 @@ stay's check-in and another reminder the day before its checkout cleaning. Every
 contains all confirmed checkout/cleaning dates in the next 60 days. Stable
 per-stay keys prevent duplicates when the scheduler runs every 15 minutes. The
 default send time is 9:00 AM in the property timezone.
+New reservations first detected within five days of check-in generate a
+one-time last-minute reminder on the next poll, including same-day check-ins.
+The detection window is retained for 24 hours so a failed cloud run can recover
+without repeatedly alerting recipients.
 
 `CLEANER_RECIPIENTS_JSON` may contain multiple explicitly approved contacts.
 Host Ops sends a private SMS copy to each contact rather than exposing phone

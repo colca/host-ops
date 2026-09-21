@@ -158,7 +158,8 @@ class SqliteStore:
                 db.execute(
                     """
                     SELECT actions.id, actions.status, actions.payload,
-                           actions.execute_at, events.payload AS event_payload
+                           actions.execute_at, events.payload AS event_payload,
+                           events.occurred_at AS event_occurred_at
                     FROM actions
                     JOIN events ON events.id = actions.event_id
                     WHERE actions.type = 'cleaner_sms'

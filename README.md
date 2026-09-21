@@ -74,6 +74,10 @@ stay's check-in, and again the day before its checkout cleaning. Every reminder 
 confirmed checkout/cleaning dates in the next 60 days. Stable per-stay keys
 prevent duplicates when polling repeatedly. By default, reminders use 9:00 AM
 in the property's IANA timezone.
+When a newly detected reservation checks in within five days, the next poll
+sends a one-time last-minute reminder immediately instead of waiting for the
+normal reminder hour. A booking detected exactly five days before check-in uses
+the regular five-day idempotency key so it cannot produce two alerts.
 
 ## Optional live SMS delivery
 

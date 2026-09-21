@@ -139,12 +139,14 @@ class FirestoreStore:
             if action.get("type") != "cleaner_sms" or action.get("status") not in allowed:
                 continue
             event = self.events.document(str(action["event_id"])).get()
-            event_payload = event.to_dict().get("payload", {}) if event.exists else {}
+            event_data = event.to_dict() if event.exists else {}
+            event_payload = event_data.get("payload", {})
             rows.append(
                 {
                     **action,
                     "payload": json.dumps(action.get("payload", {}), sort_keys=True),
                     "event_payload": json.dumps(event_payload, sort_keys=True),
+                    "event_occurred_at": event_data.get("occurred_at"),
                 }
             )
         return sorted(

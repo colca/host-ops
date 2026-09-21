@@ -645,6 +645,57 @@ END:VCALENDAR
             )
             self.assertEqual(2, len({record["idempotency_key"] for record in records}))
 
+    def test_new_same_day_booking_sends_one_immediate_reminder_per_recipient(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = SqliteStore(root / "test.db")
+            store.initialize()
+            detected_at = datetime(2026, 8, 27, 13, tzinfo=timezone.utc)
+            event = Event(
+                type="calendar_stay_detected",
+                occurred_at=detected_at,
+                payload={
+                    "check_in": "2026-08-27T16:00:00-07:00",
+                    "check_out": "2026-09-01T11:00:00-07:00",
+                },
+            )
+            action = ProposedAction(
+                event_id=event.id,
+                type="cleaner_sms",
+                summary="Last-minute cleaner work order",
+                payload={
+                    "check_in": "2026-08-27T16:00:00-07:00",
+                    "check_out": "2026-09-01T11:00:00-07:00",
+                },
+                execute_at=detected_at,
+                idempotency_key="same-day-booking-action",
+            )
+            store.save_event_and_actions(event, [action])
+            outbox_path = root / "outbox.jsonl"
+            recipients = [
+                ("+15555550100", "Host"),
+                ("+15555550101", "Cleaner"),
+            ]
+
+            first = run_due_cleaner_actions(
+                store,
+                FileOutboxMessagingAdapter(outbox_path),
+                now=datetime(2026, 8, 27, 14, tzinfo=timezone.utc),
+                recipients=recipients,
+            )
+            second = run_due_cleaner_actions(
+                store,
+                FileOutboxMessagingAdapter(outbox_path),
+                now=datetime(2026, 8, 27, 14, tzinfo=timezone.utc),
+                recipients=recipients,
+            )
+
+            self.assertEqual((1, 2), first)
+            self.assertEqual((1, 0), second)
+            records = outbox_path.read_text().splitlines()
+            self.assertEqual(2, len(records))
+            self.assertTrue(all("checks in today" in record for record in records))
+
     def test_runner_does_not_claim_future_or_pending_approval_actions(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
