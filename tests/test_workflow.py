@@ -449,6 +449,75 @@ END:VCALENDAR
 
         self.assertEqual([], parse_ical(content))
 
+    def test_full_poll_cancels_previously_confirmed_stay_missing_from_feed(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = SqliteStore(Path(directory) / "test.db")
+            store.initialize()
+            calendar = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:later-cancelled-reservation
+DTSTART;VALUE=DATE:20261110
+DTEND;VALUE=DATE:20261113
+SUMMARY:Reserved
+END:VEVENT
+END:VCALENDAR
+"""
+            stay = parse_ical(calendar)[0]
+            event = stay.to_event()
+            store.save_event_and_actions(event, self.engine.handle(event))
+
+            before = run_due_cleaner_actions(
+                store,
+                FileOutboxMessagingAdapter(Path(directory) / "outbox.jsonl"),
+                now=datetime(2026, 10, 27, 16, tzinfo=timezone.utc),
+            )
+            cancelled = store.reconcile_calendar_stays(set())
+            after = run_due_cleaner_actions(
+                store,
+                FileOutboxMessagingAdapter(Path(directory) / "outbox.jsonl"),
+                now=datetime(2026, 10, 27, 16, tzinfo=timezone.utc),
+            )
+
+            self.assertEqual((1, 1), before)
+            self.assertEqual(1, cancelled)
+            self.assertEqual((0, 0), after)
+            with store.connect() as db:
+                status = db.execute("SELECT status FROM actions").fetchone()[0]
+            self.assertEqual(ActionStatus.CANCELLED.value, status)
+
+            self.assertEqual(0, store.reconcile_calendar_stays({event.id}))
+            with store.connect() as db:
+                restored_status = db.execute(
+                    "SELECT status FROM actions"
+                ).fetchone()[0]
+            self.assertEqual(ActionStatus.READY.value, restored_status)
+
+    def test_reconciliation_does_not_cancel_non_airbnb_events(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = SqliteStore(Path(directory) / "test.db")
+            store.initialize()
+            event = Event(
+                type="calendar_stay_detected",
+                payload={
+                    "source": "manual",
+                    "check_in": "2026-11-10T00:00:00+00:00",
+                    "check_out": "2026-11-13T00:00:00+00:00",
+                },
+            )
+            action = ProposedAction(
+                event_id=event.id,
+                type="cleaner_sms",
+                summary="Manual cleaner work",
+                payload=event.payload,
+                idempotency_key="manual-cleaning",
+            )
+            store.save_event_and_actions(event, [action])
+
+            self.assertEqual(0, store.reconcile_calendar_stays(set()))
+            with store.connect() as db:
+                status = db.execute("SELECT status FROM actions").fetchone()[0]
+            self.assertEqual(ActionStatus.READY.value, status)
+
     def test_private_calendar_url_is_read_only_from_environment(self) -> None:
         with patch.dict(
             "os.environ", {"TEST_AIRBNB_ICAL_URL": "https://example.test/private.ics"}

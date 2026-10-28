@@ -74,6 +74,9 @@ stay's check-in, and again the day before its checkout cleaning. Every reminder 
 confirmed checkout/cleaning dates in the next 60 days. Stable per-stay keys
 prevent duplicates when polling repeatedly. By default, reminders use 9:00 AM
 in the property's IANA timezone.
+Each successful full iCal poll reconciles stored cleaner work against the
+current Airbnb feed. Cancelled or removed reservations are excluded from later
+reminder texts while their audit history remains available.
 When a newly detected reservation checks in within five days, the next poll
 sends a one-time last-minute reminder immediately instead of waiting for the
 normal reminder hour. A booking detected exactly five days before check-in uses

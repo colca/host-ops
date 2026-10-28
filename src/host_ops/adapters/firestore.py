@@ -107,6 +107,47 @@ class FirestoreStore:
             ),
         )
 
+    def reconcile_calendar_stays(self, active_event_ids: set[str]) -> int:
+        """Cancel cleaner work whose Airbnb stay vanished from a full poll."""
+        stale_event_ids: set[str] = set()
+        for snapshot in self.events.stream():
+            event = snapshot.to_dict()
+            if (
+                event.get("type") == "calendar_stay_detected"
+                and event.get("payload", {}).get("source") == "airbnb_ical"
+                and str(event.get("id")) not in active_event_ids
+            ):
+                stale_event_ids.add(str(event.get("id")))
+        cancelled = 0
+        for snapshot in self.actions.stream():
+            action = snapshot.to_dict()
+            event_id = str(action.get("event_id"))
+            if (
+                event_id in active_event_ids
+                and action.get("type") == "cleaner_sms"
+                and action.get("status") == ActionStatus.CANCELLED.value
+            ):
+                snapshot.reference.update(
+                    {
+                        "status": ActionStatus.READY.value,
+                        "reactivated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                continue
+            if (
+                event_id in stale_event_ids
+                and action.get("status") != ActionStatus.CANCELLED.value
+            ):
+                snapshot.reference.update(
+                    {
+                        "status": ActionStatus.CANCELLED.value,
+                        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+                        "cancellation_reason": "absent_from_airbnb_ical",
+                    }
+                )
+                cancelled += 1
+        return cancelled
+
     def record_cloud_cycle(
         self,
         *,

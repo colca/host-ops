@@ -85,6 +85,63 @@ class SqliteStore:
                 inserted += cursor.rowcount
             return inserted
 
+    def reconcile_calendar_stays(self, active_event_ids: set[str]) -> int:
+        """Cancel stored Airbnb cleaner work absent from a successful full poll.
+
+        Airbnb removes cancelled reservations from its iCal feed (or marks them
+        cancelled).  The stable event IDs let a complete poll act as the source
+        of truth without deleting audit history or idempotency records.
+        """
+        with self.connect() as db:
+            if active_event_ids:
+                active_placeholders = ", ".join("?" for _ in active_event_ids)
+                db.execute(
+                    f"""
+                    UPDATE actions
+                    SET status = ?
+                    WHERE event_id IN ({active_placeholders})
+                      AND type = 'cleaner_sms'
+                      AND status = ?
+                    """,
+                    (
+                        ActionStatus.READY.value,
+                        *active_event_ids,
+                        ActionStatus.CANCELLED.value,
+                    ),
+                )
+            rows = list(
+                db.execute(
+                    """
+                    SELECT id, payload
+                    FROM events
+                    WHERE type = 'calendar_stay_detected'
+                    """
+                )
+            )
+            stale_event_ids = [
+                row["id"]
+                for row in rows
+                if json.loads(row["payload"]).get("source") == "airbnb_ical"
+                and row["id"] not in active_event_ids
+            ]
+            if not stale_event_ids:
+                return 0
+            placeholders = ", ".join("?" for _ in stale_event_ids)
+            cursor = db.execute(
+                f"""
+                UPDATE actions
+                SET status = ?
+                WHERE event_id IN ({placeholders})
+                  AND status != ?
+                """,
+                (
+                    ActionStatus.CANCELLED.value,
+                    *stale_event_ids,
+                    ActionStatus.CANCELLED.value,
+                ),
+            )
+            return cursor.rowcount
+
     def list_actions(self) -> list[sqlite3.Row]:
         with self.connect() as db:
             return list(

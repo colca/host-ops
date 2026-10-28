@@ -205,10 +205,16 @@ def main() -> None:
             raise SystemExit(f"Calendar poll failed: {error}") from error
         stays = parse_ical(content)
         inserted = 0
+        active_event_ids: set[str] = set()
         for stay in stays:
             event = stay.to_event()
+            active_event_ids.add(event.id)
             inserted += store.save_event_and_actions(event, engine.handle(event))
-        print(f"Polled {len(stays)} calendar stay(s); created {inserted} action(s).")
+        cancelled = store.reconcile_calendar_stays(active_event_ids)
+        print(
+            f"Polled {len(stays)} calendar stay(s); created {inserted} action(s); "
+            f"cancelled {cancelled} stale action(s)."
+        )
         print_actions(store)
     elif args.command == "cloud-cycle":
         from google.cloud import firestore
@@ -233,9 +239,12 @@ def main() -> None:
             raise SystemExit(f"Calendar poll failed: {error}") from error
         stays = parse_ical(content)
         inserted = 0
+        active_event_ids: set[str] = set()
         for stay in stays:
             event = stay.to_event()
+            active_event_ids.add(event.id)
             inserted += cloud_store.save_event_and_actions(event, engine.handle(event))
+        cloud_store.reconcile_calendar_stays(active_event_ids)
         contacts = cleaner_contacts(app_config)
         cloud_outbox = FirestoreOutboxMessagingAdapter(
             cloud_store.client, app_config.property.id
